@@ -1,0 +1,967 @@
+"use client";
+
+import type { ComponentType, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  BadgeCheck,
+  Building2,
+  FileText,
+  Globe,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  Search,
+  Sparkles,
+  Target,
+  UserRound,
+  X,
+  Shield,
+  DollarSign,
+  Award,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Briefcase,
+  Star,
+  Check,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { NAICS_CODES } from "@/data/opportunities";
+import AppIcon from "@/components/AppIcon";
+import { useAuth } from "@/context/AuthContext";
+
+const emptyProfile = {
+  contactName: "",
+  jobTitle: "",
+  email: "",
+  phone: "",
+  website: "",
+  companyName: "",
+  companyAddress: "",
+  region: "",
+  uei: "",
+  cageCode: "",
+  businessType: "Small Business",
+  certifications: "",
+  description: "",
+  samRegistrationDate: "",
+  samExpirationDate: "",
+  samStatus: "",
+  dunsNumber: "",
+  bondingCapacity: "",
+  bondingCompany: "",
+  generalLiability: "",
+  workersComp: "",
+  autoLiability: "",
+  insuranceExpiry: "",
+  yearsInBusiness: "",
+  annualRevenue: "",
+  employeeCount: "",
+  clearanceLevel: "",
+};
+
+function FieldLabel({
+  label,
+  hint,
+  required = false,
+}: {
+  label: string;
+  hint?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="mb-2">
+      <label className="text-[13px] font-semibold text-slate-900">
+        {label}
+        {required && <span className="text-rose-500"> *</span>}
+      </label>
+      {hint ? <p className="mt-1 text-[12px] leading-5 text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function InputShell({
+  icon,
+  children,
+}: {
+  icon?: ComponentType<{ className?: string }>;
+  children: ReactNode;
+}) {
+  const Icon = icon;
+
+  return (
+    <div className="relative">
+      {Icon ? (
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function SectionShell({
+  icon,
+  title,
+  description,
+  children,
+  action,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="rounded-[1.35rem] border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.05)]">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+            <AppIcon icon={icon} size="sm" tone="blue" />
+          </div>
+          <div>
+            <h2 className="text-[18px] font-bold text-slate-950">{title}</h2>
+            <p className="text-[13px] text-slate-500">{description}</p>
+          </div>
+        </div>
+        {action}
+      </div>
+      <div className="px-6 py-6">{children}</div>
+    </section>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  icon,
+  type = "text",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  icon?: ComponentType<{ className?: string }>;
+  type?: string;
+}) {
+  return (
+    <InputShell icon={icon}>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-xl border border-slate-200 bg-slate-50 ${icon ? "pl-10 pr-4" : "px-4"} py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]`}
+      />
+    </InputShell>
+  );
+}
+
+export default function CompanyProfileForm() {
+  const { user, companyProfile, updateProfile: saveProfile, updateUser: saveUser } = useAuth();
+  const [profile, setProfile] = useState(emptyProfile);
+  const [selectedNaics, setSelectedNaics] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [manualNaics, setManualNaics] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [pastPerformance, setPastPerformance] = useState<
+    { contract: string; agency: string; value: string; period: string; cpars: string; rating: number }[]
+  >([]);
+
+  // Load profile from AuthContext when available
+  useEffect(() => {
+    if (user) {
+      setProfile((prev) => ({
+        ...prev,
+        contactName: user.fullName || "",
+        jobTitle: user.jobTitle || "",
+        email: user.email || "",
+        phone: user.phone || "",
+      }));
+    }
+    if (companyProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        companyName: companyProfile.companyName || "",
+        companyAddress: companyProfile.companyAddress || "",
+        region: companyProfile.region || "",
+        website: companyProfile.website || "",
+        description: companyProfile.description || "",
+        businessType: companyProfile.businessType || "Small Business",
+        certifications: (companyProfile.certifications || []).join(", "),
+        uei: companyProfile.uei || "",
+        cageCode: companyProfile.cageCode || "",
+        dunsNumber: companyProfile.dunsNumber || "",
+        clearanceLevel: companyProfile.clearanceLevel || "",
+        samRegistrationDate: companyProfile.samRegistrationDate || "",
+        samExpirationDate: companyProfile.samExpirationDate || "",
+        samStatus: companyProfile.samStatus || "",
+        bondingCapacity: companyProfile.bondingCapacity || "",
+        bondingCompany: companyProfile.bondingCompany || "",
+        generalLiability: companyProfile.generalLiability || "",
+        workersComp: companyProfile.workersComp || "",
+        autoLiability: companyProfile.autoLiability || "",
+        insuranceExpiry: companyProfile.insuranceExpiry || "",
+        yearsInBusiness: companyProfile.yearsInBusiness || "",
+        annualRevenue: companyProfile.annualRevenue || "",
+        employeeCount: companyProfile.employeeCount || "",
+      }));
+      setSelectedNaics(companyProfile.naicsCodes || []);
+    }
+  }, [user, companyProfile]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    setSaveError(null);
+    try {
+      const certsList = profile.certifications
+        ? profile.certifications.split(",").map((c) => c.trim()).filter(Boolean)
+        : [];
+
+      await saveProfile({
+        companyName: profile.companyName,
+        companyAddress: profile.companyAddress,
+        region: profile.region,
+        website: profile.website,
+        description: profile.description,
+        businessType: profile.businessType,
+        certifications: certsList,
+        uei: profile.uei,
+        cageCode: profile.cageCode,
+        dunsNumber: profile.dunsNumber,
+        clearanceLevel: profile.clearanceLevel,
+        samRegistrationDate: profile.samRegistrationDate,
+        samExpirationDate: profile.samExpirationDate,
+        samStatus: profile.samStatus,
+        bondingCapacity: profile.bondingCapacity,
+        bondingCompany: profile.bondingCompany,
+        generalLiability: profile.generalLiability,
+        workersComp: profile.workersComp,
+        autoLiability: profile.autoLiability,
+        insuranceExpiry: profile.insuranceExpiry,
+        yearsInBusiness: profile.yearsInBusiness,
+        annualRevenue: profile.annualRevenue,
+        employeeCount: profile.employeeCount,
+        naicsCodes: selectedNaics,
+      });
+
+      await saveUser({
+        fullName: profile.contactName,
+        jobTitle: profile.jobTitle,
+        phone: profile.phone,
+      });
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("Failed to save profile:", msg);
+      setSaveError(msg);
+      setTimeout(() => setSaveError(null), 5000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Merge profile NAICS into the available list so custom codes are visible
+  const allAvailableNaics = useMemo(() => {
+    const baseCodes = new Set(NAICS_CODES.map((n) => n.code));
+    const profileExtras = selectedNaics
+      .filter((code) => !baseCodes.has(code))
+      .map((code) => ({ code, label: `NAICS ${code}` }));
+    return [...profileExtras, ...NAICS_CODES];
+  }, [selectedNaics]);
+
+  const filteredNaics = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return allAvailableNaics;
+
+    return allAvailableNaics.filter(
+      (item) =>
+        item.code.includes(query) || item.label.toLowerCase().includes(query)
+    );
+  }, [search, allAvailableNaics]);
+
+  const updateProfile = (field: keyof typeof emptyProfile, value: string) => {
+    setProfile((current) => ({ ...current, [field]: value }));
+  };
+
+  const addNaics = (code: string) => {
+    setSelectedNaics((current) =>
+      current.includes(code) ? current : [...current, code]
+    );
+  };
+
+  const removeNaics = (code: string) => {
+    setSelectedNaics((current) => current.filter((item) => item !== code));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_55%,#fffaf2_100%)] shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+        <div className="grid grid-cols-[minmax(0,1fr)_240px] gap-6 px-7 py-7">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-sky-800">
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={2.1} />
+              Company Profile
+            </div>
+            <h1 className="max-w-3xl text-[32px] font-bold leading-[1.08] text-slate-950">
+              Build the company profile ARBER uses to find and qualify opportunities.
+            </h1>
+            <p className="mt-3 max-w-3xl text-[15px] leading-7 text-slate-600">
+              Keep this focused. Contact details, business description, and NAICS codes
+              are the three main inputs that drive profile quality.
+            </p>
+
+            <div className="mt-6 grid max-w-3xl grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  Company
+                </p>
+                <p className="mt-1 truncate text-[14px] font-semibold text-slate-900">
+                  {profile.companyName}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  NAICS
+                </p>
+                <p className="mt-1 text-[14px] font-semibold text-slate-900">
+                  {selectedNaics.length} selected
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  Coverage
+                </p>
+                <p className="mt-1 text-[14px] font-semibold text-slate-900">
+                  Regional
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-5">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Save
+              </p>
+              <p className="mt-2 text-[14px] font-semibold text-slate-900">
+                Keep your profile updated before running extraction.
+              </p>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-[#1b2a3a] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#24384d] disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : saved ? (
+                <>
+                  <Check className="h-4 w-4 text-green-400" strokeWidth={2.1} />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" strokeWidth={2.1} />
+                  Save Profile
+                </>
+              )}
+            </button>
+            {saveError && (
+              <p className="mt-2 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {saveError}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <SectionShell
+        icon={UserRound}
+        title="General Profile"
+        description="Primary contact details used in ARBER."
+      >
+        <div className="grid grid-cols-[240px_minmax(0,1fr)] gap-6">
+          <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-5">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-[#1b2a3a] text-xl font-bold text-white">
+              {profile.contactName
+                .split(" ")
+                .map((part) => part[0])
+                .join("")
+                .slice(0, 2)}
+            </div>
+            <p className="mt-4 text-[18px] font-bold text-slate-950">{profile.contactName}</p>
+            <p className="text-[13px] font-medium text-slate-600">{profile.jobTitle}</p>
+            <div className="mt-5 space-y-2 text-[13px] text-slate-600">
+              <p>{profile.email}</p>
+              <p>{profile.phone}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <FieldLabel
+                label="Primary Contact"
+                hint="Name shown in drafts and workflow activity."
+                required
+              />
+              <TextInput
+                value={profile.contactName}
+                onChange={(value) => updateProfile("contactName", value)}
+                icon={UserRound}
+              />
+            </div>
+            <div>
+              <FieldLabel label="Role / Title" hint="Job title for signatures and references." />
+              <TextInput
+                value={profile.jobTitle}
+                onChange={(value) => updateProfile("jobTitle", value)}
+              />
+            </div>
+            <div>
+              <FieldLabel
+                label="Email Address"
+                hint="Business email used by ARBER."
+                required
+              />
+              <TextInput
+                value={profile.email}
+                onChange={(value) => updateProfile("email", value)}
+                icon={Mail}
+                type="email"
+              />
+            </div>
+            <div>
+              <FieldLabel label="Phone Number" hint="Primary contact line." />
+              <TextInput
+                value={profile.phone}
+                onChange={(value) => updateProfile("phone", value)}
+                icon={Phone}
+              />
+            </div>
+          </div>
+        </div>
+      </SectionShell>
+
+      <SectionShell
+        icon={Building2}
+        title="Business Profile"
+        description="Company details, business description, and targeting information."
+        action={
+          <button className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100">
+            <Sparkles className="h-3.5 w-3.5" strokeWidth={2.1} />
+            Generate Description & NAICS
+          </button>
+        }
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <FieldLabel
+                label="Company Name"
+                hint="The business name used in solicitations."
+                required
+              />
+              <TextInput
+                value={profile.companyName}
+                onChange={(value) => updateProfile("companyName", value)}
+                icon={Building2}
+              />
+            </div>
+            <div>
+              <FieldLabel label="Website" hint="Used for business context and enrichment." />
+              <TextInput
+                value={profile.website}
+                onChange={(value) => updateProfile("website", value)}
+                icon={Globe}
+              />
+            </div>
+            <div className="col-span-2">
+              <FieldLabel
+                label="Company Address"
+                hint="Address used in responses and business records."
+                required
+              />
+              <TextInput
+                value={profile.companyAddress}
+                onChange={(value) => updateProfile("companyAddress", value)}
+                icon={MapPin}
+              />
+            </div>
+            <div>
+              <FieldLabel
+                label="Region"
+                hint="States, cities, or areas where your business operates."
+              />
+              <TextInput
+                value={profile.region}
+                onChange={(value) => updateProfile("region", value)}
+              />
+            </div>
+            <div>
+              <FieldLabel
+                label="Business Type"
+                hint="General classification for market positioning."
+              />
+              <TextInput
+                value={profile.businessType}
+                onChange={(value) => updateProfile("businessType", value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">
+            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <AppIcon icon={FileText} size="sm" tone="blue" />
+                <div>
+                  <p className="text-[15px] font-bold text-slate-900">Business Description</p>
+                  <p className="text-[12px] text-slate-500">
+                    Describe capabilities, qualifications, and typical work.
+                  </p>
+                </div>
+              </div>
+              <textarea
+                rows={10}
+                value={profile.description}
+                onChange={(e) => updateProfile("description", e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium leading-7 text-slate-800 outline-none transition-all focus:border-slate-400 focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]"
+              />
+            </div>
+
+            <div className="rounded-[1.25rem] border border-slate-200 bg-white p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <AppIcon icon={BadgeCheck} size="sm" tone="green" />
+                <div>
+                  <p className="text-[15px] font-bold text-slate-900">Entity & Qualifications</p>
+                  <p className="text-[12px] text-slate-500">
+                    Core identifiers and certifications.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <FieldLabel label="UEI" hint="Unique Entity Identifier from SAM.gov" />
+                  <TextInput
+                    value={profile.uei}
+                    onChange={(value) => updateProfile("uei", value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="CAGE Code" />
+                  <TextInput
+                    value={profile.cageCode}
+                    onChange={(value) => updateProfile("cageCode", value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="Certifications" hint="Set-asides or socio-economic qualifiers." />
+                  <TextInput
+                    value={profile.certifications}
+                    onChange={(value) => updateProfile("certifications", value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="Business Type" />
+                  <TextInput
+                    value={profile.businessType}
+                    onChange={(value) => updateProfile("businessType", value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.25rem] border border-slate-200 bg-white">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <AppIcon icon={Target} size="sm" tone="amber" />
+                <div>
+                  <p className="text-[15px] font-bold text-slate-900">NAICS Codes</p>
+                  <p className="text-[12px] text-slate-500">
+                    Select the codes ARBER should use for project extraction.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[300px_minmax(0,1fr)] gap-0">
+              <div className="border-r border-slate-200 p-5">
+                <FieldLabel label="Search Codes" hint="Search by code or industry name." />
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search NAICS"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]"
+                  />
+                </div>
+
+                <div className="mt-4">
+                  <FieldLabel label="Add Custom Code" hint="Enter a NAICS code manually." />
+                  <div className="flex gap-2">
+                    <input
+                      value={manualNaics}
+                      onChange={(e) => setManualNaics(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="e.g. 541611"
+                      className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = manualNaics.trim();
+                        if (code.length >= 2 && !selectedNaics.includes(code)) {
+                          addNaics(code);
+                          setManualNaics("");
+                        }
+                      }}
+                      disabled={manualNaics.trim().length < 2 || selectedNaics.includes(manualNaics.trim())}
+                      className="flex items-center gap-1 px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <p className="mb-3 text-[12px] font-semibold text-slate-700">
+                    Selected Codes
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedNaics.map((code) => {
+                      const item = NAICS_CODES.find((naics) => naics.code === code);
+                      const label = item ? item.label : `NAICS ${code}`;
+
+                      return (
+                        <span
+                          key={code}
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-800"
+                          title={label}
+                        >
+                          <span>{code}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeNaics(code)}
+                            className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-slate-600 transition-colors hover:bg-slate-200"
+                          >
+                            <X className="h-3 w-3" strokeWidth={2.4} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5">
+                <p className="mb-3 text-[12px] font-semibold text-slate-700">
+                  Available Codes
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredNaics.map((item) => {
+                    const isSelected = selectedNaics.includes(item.code);
+
+                    return (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => addNaics(item.code)}
+                        disabled={isSelected}
+                        className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                          isSelected
+                            ? "cursor-default border-emerald-200 bg-emerald-50"
+                            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[12px] font-bold text-slate-900">
+                            {item.code}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              isSelected
+                                ? "bg-emerald-500 text-white"
+                                : "bg-white text-slate-600"
+                            }`}
+                          >
+                            {isSelected ? "Added" : "Add"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[12px] leading-5 text-slate-600">
+                          {item.label}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </SectionShell>
+
+      {/* SAM.gov Registration */}
+      <SectionShell
+        icon={Shield}
+        title="SAM.gov Registration"
+        description="Federal registration status and entity identifiers."
+      >
+        <div className="space-y-5">
+          {/* Status banner */}
+          <div className={`rounded-xl p-4 flex items-center gap-3 ${
+            profile.samStatus === "Active"
+              ? "bg-green-50 border border-green-200"
+              : "bg-red-50 border border-red-200"
+          }`}>
+            {profile.samStatus === "Active" ? (
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-500" />
+            )}
+            <div>
+              <p className={`text-sm font-bold ${profile.samStatus === "Active" ? "text-green-800" : "text-red-800"}`}>
+                SAM.gov Status: {profile.samStatus}
+              </p>
+              <p className={`text-xs ${profile.samStatus === "Active" ? "text-green-600" : "text-red-600"}`}>
+                Registration expires {profile.samExpirationDate}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <FieldLabel label="UEI (Unique Entity Identifier)" hint="Assigned by SAM.gov upon registration." required />
+              <TextInput value={profile.uei} onChange={(value) => updateProfile("uei", value)} />
+            </div>
+            <div>
+              <FieldLabel label="CAGE Code" hint="Commercial and Government Entity code." required />
+              <TextInput value={profile.cageCode} onChange={(value) => updateProfile("cageCode", value)} />
+            </div>
+            <div>
+              <FieldLabel label="DUNS Number" hint="Legacy identifier, still referenced in some solicitations." />
+              <TextInput value={profile.dunsNumber} onChange={(value) => updateProfile("dunsNumber", value)} />
+            </div>
+            <div>
+              <FieldLabel label="Security Clearance" hint="Facility or personnel clearance level." />
+              <TextInput value={profile.clearanceLevel} onChange={(value) => updateProfile("clearanceLevel", value)} icon={Shield} />
+            </div>
+            <div>
+              <FieldLabel label="Registration Date" />
+              <TextInput value={profile.samRegistrationDate} onChange={(value) => updateProfile("samRegistrationDate", value)} icon={Calendar} />
+            </div>
+            <div>
+              <FieldLabel label="Expiration Date" />
+              <TextInput value={profile.samExpirationDate} onChange={(value) => updateProfile("samExpirationDate", value)} icon={Calendar} />
+            </div>
+          </div>
+        </div>
+      </SectionShell>
+
+      {/* Insurance & Bonding */}
+      <SectionShell
+        icon={DollarSign}
+        title="Insurance & Bonding"
+        description="Coverage details required for federal contract compliance."
+      >
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-4 h-4 text-emerald-600" />
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bonding Capacity</p>
+              </div>
+              <p className="text-lg font-bold text-slate-900">{profile.bondingCapacity}</p>
+              <p className="text-[11px] text-slate-500 mt-1">{profile.bondingCompany}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4 text-blue-600" />
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">General Liability</p>
+              </div>
+              <p className="text-lg font-bold text-slate-900">{profile.generalLiability}</p>
+              <p className="text-[11px] text-slate-500 mt-1">Per occurrence</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Insurance Expiry</p>
+              </div>
+              <p className="text-lg font-bold text-slate-900">{profile.insuranceExpiry}</p>
+              <p className="text-[11px] text-slate-500 mt-1">All policies</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <FieldLabel label="Bonding Capacity" hint="Maximum single-contract bond amount." required />
+              <TextInput value={profile.bondingCapacity} onChange={(value) => updateProfile("bondingCapacity", value)} icon={DollarSign} />
+            </div>
+            <div>
+              <FieldLabel label="Bonding Company" hint="Surety company name." />
+              <TextInput value={profile.bondingCompany} onChange={(value) => updateProfile("bondingCompany", value)} />
+            </div>
+            <div>
+              <FieldLabel label="General Liability" hint="Per-occurrence coverage amount." required />
+              <TextInput value={profile.generalLiability} onChange={(value) => updateProfile("generalLiability", value)} />
+            </div>
+            <div>
+              <FieldLabel label="Workers' Comp" hint="Coverage type or limit." />
+              <TextInput value={profile.workersComp} onChange={(value) => updateProfile("workersComp", value)} />
+            </div>
+            <div>
+              <FieldLabel label="Auto Liability" hint="Per-occurrence coverage amount." />
+              <TextInput value={profile.autoLiability} onChange={(value) => updateProfile("autoLiability", value)} />
+            </div>
+            <div>
+              <FieldLabel label="Insurance Expiry Date" hint="Earliest expiration across all policies." />
+              <TextInput value={profile.insuranceExpiry} onChange={(value) => updateProfile("insuranceExpiry", value)} icon={Calendar} />
+            </div>
+          </div>
+        </div>
+      </SectionShell>
+
+      {/* Company Stats & Past Performance Summary */}
+      <SectionShell
+        icon={Briefcase}
+        title="Company Overview & Past Performance"
+        description="Key metrics that strengthen your proposal positioning."
+      >
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-5">
+            <div>
+              <FieldLabel label="Years in Business" />
+              <TextInput value={profile.yearsInBusiness} onChange={(value) => updateProfile("yearsInBusiness", value)} />
+            </div>
+            <div>
+              <FieldLabel label="Annual Revenue" hint="Most recent fiscal year." />
+              <TextInput value={profile.annualRevenue} onChange={(value) => updateProfile("annualRevenue", value)} icon={DollarSign} />
+            </div>
+            <div>
+              <FieldLabel label="Employee Count" />
+              <TextInput value={profile.employeeCount} onChange={(value) => updateProfile("employeeCount", value)} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-500" />
+                <p className="text-[14px] font-bold text-slate-900">Past Performance References</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPastPerformance((prev) => [...prev, { contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3 }])}
+                className="flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Reference
+              </button>
+            </div>
+            {pastPerformance.length === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <p className="text-sm text-slate-400">No past performance references added yet.</p>
+                <button
+                  type="button"
+                  onClick={() => setPastPerformance([{ contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3 }])}
+                  className="mt-2 text-xs font-semibold text-sky-700 hover:text-sky-800 cursor-pointer"
+                >
+                  + Add your first reference
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {pastPerformance.map((ref, i) => (
+                  <div key={i} className="px-5 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Reference #{i + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPastPerformance((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel label="Contract Name" />
+                        <TextInput
+                          value={ref.contract}
+                          onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, contract: v } : r))}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="Agency" />
+                        <TextInput
+                          value={ref.agency}
+                          onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, agency: v } : r))}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="Contract Value" />
+                        <TextInput
+                          value={ref.value}
+                          onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, value: v } : r))}
+                          icon={DollarSign}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="Period of Performance" />
+                        <TextInput
+                          value={ref.period}
+                          onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, period: v } : r))}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="CPARS Rating" />
+                        <InputShell>
+                          <select
+                            value={ref.cpars}
+                            onChange={(e) => {
+                              const cpars = e.target.value;
+                              const ratingMap: Record<string, number> = { Exceptional: 5, "Very Good": 4, Satisfactory: 3, Marginal: 2, Unsatisfactory: 1 };
+                              setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, cpars, rating: ratingMap[cpars] || 3 } : r));
+                            }}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white cursor-pointer"
+                          >
+                            <option value="Exceptional">Exceptional</option>
+                            <option value="Very Good">Very Good</option>
+                            <option value="Satisfactory">Satisfactory</option>
+                            <option value="Marginal">Marginal</option>
+                            <option value="Unsatisfactory">Unsatisfactory</option>
+                          </select>
+                        </InputShell>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }, (_, j) => (
+                            <Star key={j} className={`w-4 h-4 ${j < ref.rating ? "text-amber-400 fill-amber-400" : "text-gray-200"}`} />
+                          ))}
+                          <span className={`ml-2 text-xs font-semibold ${
+                            ref.cpars === "Exceptional" ? "text-green-600" :
+                            ref.cpars === "Very Good" ? "text-blue-600" :
+                            "text-gray-600"
+                          }`}>{ref.cpars}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </SectionShell>
+    </div>
+  );
+}
