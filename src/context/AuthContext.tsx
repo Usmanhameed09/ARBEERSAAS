@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "http://187.124.76.249/api";
 
 export interface AuthUser {
   id: string;

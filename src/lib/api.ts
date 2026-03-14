@@ -6,7 +6,7 @@
 
 import type { Opportunity } from "@/data/opportunities";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "http://187.124.76.249/api";
 
 function getAuthHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;

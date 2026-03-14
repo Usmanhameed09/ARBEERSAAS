@@ -7,7 +7,7 @@ import type { Opportunity } from "@/data/opportunities";
 import { jsPDF } from "jspdf";
 import { formatContractValue } from "@/lib/usaspending";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "http://187.124.76.249/api";
 
 interface AISummary {
   projectOverview: string;
