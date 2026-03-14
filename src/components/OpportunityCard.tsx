@@ -20,7 +20,7 @@ import { usePipeline } from "@/context/PipelineContext";
 import AppIcon from "@/components/AppIcon";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-import AISummaryModal from "@/components/AISummaryModal";
+// AI Summary opens in new tab
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -37,7 +37,6 @@ export default function OpportunityCard({
   const { addToPipeline, isInPipeline } = usePipeline();
   const inPipeline = isInPipeline(opportunity.id);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
 
   return (
     <div
@@ -219,7 +218,8 @@ export default function OpportunityCard({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setShowSummary(true);
+              localStorage.setItem("arber_summary_opportunity", JSON.stringify(opportunity));
+              window.open("/opportunities/summary", "_blank");
             }}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#182434] hover:bg-[#223247] text-white text-xs font-semibold rounded-xl transition-colors"
           >
@@ -291,13 +291,6 @@ export default function OpportunityCard({
         </div>
       </div>
 
-      {/* AI Summary Modal */}
-      {showSummary && (
-        <AISummaryModal
-          opportunity={opportunity}
-          onClose={() => setShowSummary(false)}
-        />
-      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ import {
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-import AISummaryModal from "@/components/AISummaryModal";
+// AI Summary opens in new tab
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -37,7 +37,6 @@ export default function OpportunityDetailModal({
 }: OpportunityDetailModalProps) {
   const isGo = opportunity.status === "Go";
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [showAISummary, setShowAISummary] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -393,7 +392,10 @@ export default function OpportunityDetailModal({
         {/* Footer actions */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3 flex-shrink-0 bg-gray-50">
           <button
-            onClick={() => setShowAISummary(true)}
+            onClick={() => {
+              localStorage.setItem("arber_summary_opportunity", JSON.stringify(opportunity));
+              window.open("/opportunities/summary", "_blank");
+            }}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1e2a3a] hover:bg-[#2a3d55] text-white text-sm font-semibold rounded-lg transition-colors"
           >
             {generatingPdf ? (
@@ -441,13 +443,6 @@ export default function OpportunityDetailModal({
           </button>
         </div>
       </div>
-      {/* AI Summary Modal */}
-      {showAISummary && (
-        <AISummaryModal
-          opportunity={opportunity}
-          onClose={() => setShowAISummary(false)}
-        />
-      )}
     </div>
   );
 }

@@ -1,23 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bookmark } from "lucide-react";
-import {
-  opportunities as initialOpportunities,
-  fetchableOpportunities,
-} from "@/data/opportunities";
 import type { Opportunity } from "@/data/opportunities";
 import OpportunityCard from "@/components/OpportunityCard";
 import OpportunityDetailModal from "@/components/OpportunityDetailModal";
 import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 
-const allKnown = [...initialOpportunities, ...fetchableOpportunities];
-
 export default function SavedOpportunitiesPage() {
   const { savedIds } = useSavedOpportunities();
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
+  const [allOpps, setAllOpps] = useState<Opportunity[]>([]);
 
-  const savedOpps = allKnown.filter((opp) => savedIds.has(opp.id));
+  // Load all opportunities from localStorage (same source as opportunities page)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("arber_opportunities");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.opportunities?.length > 0) {
+          setAllOpps(parsed.opportunities);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const savedOpps = allOpps.filter((opp) => savedIds.has(opp.id));
 
   return (
     <div className="p-5">

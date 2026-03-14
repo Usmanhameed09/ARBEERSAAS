@@ -259,12 +259,14 @@ export default function FetcherBar({
                     return (
                       <span
                         key={code}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-md text-[11px] font-medium"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold"
+                        style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
                       >
                         {code} – {naics?.label || `NAICS ${code}`}
                         <button
                           onClick={() => toggleNaics(code)}
-                          className="ml-0.5 hover:text-blue-200 text-white/80 font-bold cursor-pointer"
+                          className="ml-0.5 font-bold cursor-pointer"
+                          style={{ color: "rgba(255,255,255,0.8)" }}
                         >
                           ×
                         </button>
