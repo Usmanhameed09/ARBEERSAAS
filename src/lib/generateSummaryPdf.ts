@@ -144,7 +144,7 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   }
 
   // --- AI Pricing Prediction ---
-  if (opportunity.pricingPrediction) {
+  if (opportunity.pricingPrediction && opportunity.pricingPrediction.predictedBid != null) {
     checkPageBreak(30);
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, pageWidth - margin, y);
