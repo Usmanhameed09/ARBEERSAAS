@@ -209,7 +209,7 @@ export default function AISummaryPage() {
                   </div>
                   <div className="flex items-center gap-2 text-white/70">
                     <Clock className="w-4 h-4 text-white/40" />
-                    <span>Due: {opportunity.dueDate}</span>
+                    <span>Due: {(() => { try { return new Date(opportunity.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/Chicago" }); } catch { return opportunity.dueDate; } })()}</span>
                   </div>
                   <div className="flex items-center gap-2 text-white/70">
                     <MapPin className="w-4 h-4 text-white/40" />

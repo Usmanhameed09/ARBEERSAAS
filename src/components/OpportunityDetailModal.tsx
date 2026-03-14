@@ -112,7 +112,7 @@ export default function OpportunityDetailModal({
                 <Clock className="w-3.5 h-3.5" />
                 <span className="text-[10px] uppercase font-semibold tracking-wide">Due Date</span>
               </div>
-              <p className="text-xs font-bold text-red-600">{opportunity.dueDate}</p>
+              <p className="text-xs font-bold text-red-600">{(() => { try { return new Date(opportunity.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/Chicago" }); } catch { return opportunity.dueDate; } })()}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-1.5 text-gray-400 mb-1">

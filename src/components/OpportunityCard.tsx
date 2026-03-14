@@ -112,7 +112,7 @@ export default function OpportunityCard({
           </span>
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" strokeWidth={2.1} />
-            Due: {opportunity.dueDate}
+            Due: {(() => { try { return new Date(opportunity.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "America/Chicago" }); } catch { return opportunity.dueDate; } })()}
           </span>
           <span className="flex items-center gap-1">
             <Paperclip className="w-3 h-3" strokeWidth={2.1} />
