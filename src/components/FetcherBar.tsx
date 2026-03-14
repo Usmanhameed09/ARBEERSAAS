@@ -72,7 +72,37 @@ export default function FetcherBar({
   const [selectedSetAside, setSelectedSetAside] = useState("");
   const initializedRef = useRef(false);
 
-  // Load profile NAICS codes as defaults (once only)
+  // Load saved filters from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("arber_filters");
+      if (saved) {
+        const f = JSON.parse(saved);
+        if (f.dateRange) setDateRange(f.dateRange);
+        if (f.naicsCodes?.length > 0) {
+          setSelectedNaics(f.naicsCodes);
+          initializedRef.current = true; // Don't override with profile codes
+        }
+        if (f.noticeTypes?.length > 0) setSelectedNoticeTypes(f.noticeTypes);
+        if (f.setAside !== undefined) setSelectedSetAside(f.setAside);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Save filters to localStorage whenever they change
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    try {
+      localStorage.setItem("arber_filters", JSON.stringify({
+        dateRange,
+        naicsCodes: selectedNaics,
+        noticeTypes: selectedNoticeTypes,
+        setAside: selectedSetAside,
+      }));
+    } catch { /* ignore */ }
+  }, [dateRange, selectedNaics, selectedNoticeTypes, selectedSetAside]);
+
+  // Load profile NAICS codes as defaults (once only, if no saved filters)
   useEffect(() => {
     if (!initializedRef.current && profileNaicsCodes && profileNaicsCodes.length > 0) {
       setSelectedNaics(profileNaicsCodes);
@@ -221,24 +251,67 @@ export default function FetcherBar({
                   ({selectedNaics.length} selected)
                 </span>
               </label>
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                {allNaicsCodes.map((naics) => (
-                  <button
-                    key={naics.code}
-                    onClick={() => toggleNaics(naics.code)}
-                    className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
-                      selectedNaics.includes(naics.code)
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                    title={naics.label}
-                  >
-                    {naics.code}
-                  </button>
-                ))}
+              {/* Selected codes as removable chips */}
+              {selectedNaics.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {selectedNaics.map((code) => {
+                    const naics = allNaicsCodes.find((n) => n.code === code);
+                    return (
+                      <span
+                        key={code}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-md text-[11px] font-medium"
+                      >
+                        {code} – {naics?.label || `NAICS ${code}`}
+                        <button
+                          onClick={() => toggleNaics(code)}
+                          className="ml-0.5 hover:text-blue-200 text-white/80 font-bold cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Dropdown to add codes */}
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value && !selectedNaics.includes(e.target.value)) {
+                    setSelectedNaics((prev) => [...prev, e.target.value]);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-lg text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition cursor-pointer"
+              >
+                <option value="">+ Add NAICS code...</option>
+                {allNaicsCodes
+                  .filter((n) => !selectedNaics.includes(n.code))
+                  .map((naics) => (
+                    <option key={naics.code} value={naics.code}>
+                      {naics.code} – {naics.label}
+                    </option>
+                  ))}
+              </select>
+              {/* Manual entry */}
+              <div className="flex gap-1.5 mt-1.5">
+                <input
+                  type="text"
+                  placeholder="Enter NAICS code manually..."
+                  maxLength={6}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val && /^\d{4,6}$/.test(val) && !selectedNaics.includes(val)) {
+                        setSelectedNaics((prev) => [...prev, val]);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 border border-slate-200 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition placeholder-slate-400"
+                />
               </div>
               <p className="text-[11px] text-slate-500 mt-1.5">
-                Auto-loaded from your company profile
+                Auto-loaded from your company profile. Select from dropdown or type a code and press Enter.
               </p>
             </div>
 

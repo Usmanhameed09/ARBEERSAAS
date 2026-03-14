@@ -20,6 +20,7 @@ import { usePipeline } from "@/context/PipelineContext";
 import AppIcon from "@/components/AppIcon";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
+import AISummaryModal from "@/components/AISummaryModal";
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -36,6 +37,7 @@ export default function OpportunityCard({
   const { addToPipeline, isInPipeline } = usePipeline();
   const inPipeline = isInPipeline(opportunity.id);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   return (
     <div
@@ -119,17 +121,44 @@ export default function OpportunityCard({
           </span>
         </div>
 
-        {/* AI reason snippet */}
+        {/* AI Analysis Breakdown */}
         <div className="bg-slate-50 rounded-xl px-3 py-2.5 mb-4 border border-slate-200/80">
-          <div className="flex items-center gap-1.5 mb-1">
+          <div className="flex items-center gap-1.5 mb-2">
             <AppIcon icon={Sparkles} size="sm" tone="blue" />
             <span className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.18em]">
-              AI Insight
+              AI Analysis
             </span>
+            {opportunity.complianceScore != null && (
+              <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                opportunity.complianceScore >= 70 ? "bg-green-100 text-green-700" :
+                opportunity.complianceScore >= 50 ? "bg-amber-100 text-amber-700" :
+                "bg-red-100 text-red-700"
+              }`}>
+                {opportunity.complianceScore}/100
+              </span>
+            )}
           </div>
-          <p className="text-[12px] text-slate-600 leading-snug line-clamp-2">
+          <p className="text-[12px] text-slate-600 leading-snug line-clamp-3">
             {opportunity.aiReason}
           </p>
+          <div className="mt-2 pt-2 border-t border-slate-200/60 grid grid-cols-3 gap-1">
+            <div className="text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase">Set-Aside</div>
+              <div className="text-[10px] font-semibold text-slate-700 truncate" title={opportunity.setAside}>
+                {opportunity.setAside?.replace(/\s*\(.*\)/, "").split(" ").slice(0, 3).join(" ") || "Open"}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase">NAICS</div>
+              <div className="text-[10px] font-semibold text-slate-700">{opportunity.naicsCode}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase">Location</div>
+              <div className="text-[10px] font-semibold text-slate-700 truncate" title={opportunity.placeOfPerformance}>
+                {opportunity.placeOfPerformance?.split(",")[0] || "N/A"}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* AI Predicted Bid Price */}
@@ -188,34 +217,45 @@ export default function OpportunityCard({
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              if (generatingPdf) return;
-              setGeneratingPdf(true);
-              try {
-                await generateSummaryPdf(opportunity);
-              } catch (err) {
-                console.error("PDF generation error:", err);
-                alert("Failed to generate summary: " + (err instanceof Error ? err.message : "Unknown error"));
-              } finally {
-                setGeneratingPdf(false);
-              }
-            }}
-            disabled={generatingPdf}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#182434] hover:bg-[#223247] disabled:bg-[#182434]/70 text-white text-xs font-semibold rounded-xl transition-colors"
-          >
-            {generatingPdf ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.1} />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5" strokeWidth={2.1} />
-            )}
-            {generatingPdf ? "Generating..." : "AI Summarize"}
-          </button>
-          <button
             onClick={(e) => {
               e.stopPropagation();
+              setShowSummary(true);
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#182434] hover:bg-[#223247] text-white text-xs font-semibold rounded-xl transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" strokeWidth={2.1} />
+            AI Summarize
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
               const withUrl = opportunity.attachments.filter((a) => a.url);
-              if (withUrl.length > 0) {
+              if (withUrl.length === 0) return;
+              if (withUrl.length === 1) {
+                window.open(withUrl[0].url, "_blank");
+                return;
+              }
+              // Multiple files → download as ZIP
+              try {
+                const JSZip = (await import("jszip")).default;
+                const zip = new JSZip();
+                const results = await Promise.allSettled(
+                  withUrl.map(async (a) => {
+                    const resp = await fetch(a.url!);
+                    if (!resp.ok) return;
+                    const blob = await resp.blob();
+                    zip.file(a.name || `attachment_${withUrl.indexOf(a) + 1}`, blob);
+                  })
+                );
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${opportunity.noticeId}_documents.zip`;
+                link.click();
+                URL.revokeObjectURL(url);
+              } catch {
+                // Fallback: open all in tabs
                 withUrl.forEach((a) => window.open(a.url, "_blank"));
               }
             }}
@@ -250,6 +290,14 @@ export default function OpportunityCard({
           </button>
         </div>
       </div>
+
+      {/* AI Summary Modal */}
+      {showSummary && (
+        <AISummaryModal
+          opportunity={opportunity}
+          onClose={() => setShowSummary(false)}
+        />
+      )}
     </div>
   );
 }

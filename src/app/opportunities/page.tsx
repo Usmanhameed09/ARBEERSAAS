@@ -19,7 +19,7 @@ import ScanResultsBar from "@/components/ScanResultsBar";
 import type { FetchOptions } from "@/components/FetcherBar";
 import { useAuth } from "@/context/AuthContext";
 
-type FilterTab = "all" | "go" | "no-go";
+type FilterTab = "new" | "go" | "no-go";
 
 function OpportunitiesContent() {
   const searchParams = useSearchParams();
@@ -27,7 +27,7 @@ function OpportunitiesContent() {
   const { user, companyProfile } = useAuth();
 
   // UI state
-  const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [activeTab, setActiveTab] = useState<FilterTab>("new");
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -128,7 +128,7 @@ function OpportunitiesContent() {
   }, [allOpportunities, lastFetchTime, totalOnSam, isAnalyzing, userId, isLoading, profileNaicsCodes]);
 
   useEffect(() => {
-    if (filterParam === "go" || filterParam === "no-go") {
+    if (filterParam === "go" || filterParam === "no-go" || filterParam === "new") {
       setActiveTab(filterParam);
     }
   }, [filterParam]);
@@ -211,13 +211,14 @@ function OpportunitiesContent() {
           abortRef.current = null;
 
           const now = new Date();
-          const timeStr = now.toLocaleDateString("en-US", {
+          const timeStr = now.toLocaleString("en-US", {
+            timeZone: "America/Chicago",
             month: "short",
             day: "numeric",
             year: "numeric",
             hour: "2-digit",
             minute: "2-digit",
-          });
+          }) + " CST";
           setLastFetchTime(timeStr);
         },
 
@@ -247,7 +248,7 @@ function OpportunitiesContent() {
 
   const filtered = allOpportunities.filter((opp) => {
     const matchesTab =
-      activeTab === "all" ||
+      (activeTab === "new" && opp.isNew) ||
       (activeTab === "go" && opp.status === "Go") ||
       (activeTab === "no-go" && opp.status === "No-Go");
 
@@ -264,7 +265,7 @@ function OpportunitiesContent() {
   const noGoCount = allOpportunities.filter((o) => o.status === "No-Go").length;
 
   const tabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: "all", label: "All Opportunities", count: allOpportunities.length },
+    { key: "new", label: "New", count: newCount },
     { key: "go", label: "Go", count: goCount },
     { key: "no-go", label: "No-Go", count: noGoCount },
   ];
