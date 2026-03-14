@@ -199,24 +199,24 @@ export default function AISummaryPage() {
                     </span>
                   )}
                 </div>
-                <h1 className="text-2xl font-bold text-white leading-snug mb-4">
+                <h1 style={{ color: "#ffffff" }} className="text-2xl font-bold leading-snug mb-4">
                   {opportunity.title}
                 </h1>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="flex items-center gap-2 text-white/70">
-                    <Building2 className="w-4 h-4 text-white/40" />
+                  <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    <Building2 className="w-4 h-4" style={{ color: "rgba(255,255,255,0.4)" }} />
                     <span>{opportunity.agency}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-white/70">
-                    <Clock className="w-4 h-4 text-white/40" />
+                  <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    <Clock className="w-4 h-4" style={{ color: "rgba(255,255,255,0.4)" }} />
                     <span>Due: {(() => { try { return new Date(opportunity.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/Chicago" }); } catch { return opportunity.dueDate; } })()}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-white/70">
-                    <MapPin className="w-4 h-4 text-white/40" />
+                  <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    <MapPin className="w-4 h-4" style={{ color: "rgba(255,255,255,0.4)" }} />
                     <span>{opportunity.placeOfPerformance || "N/A"}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-white/70">
-                    <FileText className="w-4 h-4 text-white/40" />
+                  <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    <FileText className="w-4 h-4" style={{ color: "rgba(255,255,255,0.4)" }} />
                     <span>NAICS: {opportunity.naicsCode} | {opportunity.noticeId}</span>
                   </div>
                 </div>
