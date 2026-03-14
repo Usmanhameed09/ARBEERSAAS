@@ -396,8 +396,9 @@ export default function OpportunityDetailModal({
               setGeneratingPdf(true);
               try {
                 await generateSummaryPdf(opportunity);
-              } catch {
-                alert("Failed to generate summary. Please try again.");
+              } catch (err) {
+                console.error("PDF generation error:", err);
+                alert("Failed to generate summary: " + (err instanceof Error ? err.message : "Unknown error"));
               } finally {
                 setGeneratingPdf(false);
               }

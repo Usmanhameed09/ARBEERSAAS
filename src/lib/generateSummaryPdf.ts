@@ -27,9 +27,13 @@ interface AISummary {
  */
 export async function generateSummaryPdf(opportunity: Opportunity): Promise<boolean> {
   // 1. Call backend for AI summary
+  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
   const response = await fetch(`${API_BASE}/ai-summary`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ opportunity }),
   });
 
