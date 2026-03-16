@@ -49,11 +49,12 @@ export async function scanSamGov(
   setAside: string = "",
   limit: number = 50,
   dateRange: string = "3months",
+  minDaysUntilDue: number = 14,
 ): Promise<ScanResult> {
   const resp = await fetch(`${API_BASE}/pipeline/scan`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ naicsCodes, noticeTypes, setAside, limit, dateRange }),
+    body: JSON.stringify({ naicsCodes, noticeTypes, setAside, limit, dateRange, minDaysUntilDue }),
   });
   if (!resp.ok) {
     throw new Error(`Scan failed: ${resp.status}`);
@@ -88,9 +89,10 @@ export function streamOpportunities(
   setAside: string = "",
   noticeIds?: string[],
   dateRange: string = "3months",
+  minDaysUntilDue: number = 14,
 ): () => void {
   const naicsParam = naicsCodes.join(",");
-  let url = `${API_BASE}/test-pipeline/stream?naics=${encodeURIComponent(naicsParam)}&limit=${limit}&offset=${offset}&notice_types=${encodeURIComponent(noticeTypes)}&date_range=${encodeURIComponent(dateRange)}`;
+  let url = `${API_BASE}/test-pipeline/stream?naics=${encodeURIComponent(naicsParam)}&limit=${limit}&offset=${offset}&notice_types=${encodeURIComponent(noticeTypes)}&date_range=${encodeURIComponent(dateRange)}&min_days=${minDaysUntilDue}`;
   if (setAside) url += `&set_aside=${encodeURIComponent(setAside)}`;
   if (noticeIds && noticeIds.length > 0) {
     url += `&notice_ids=${encodeURIComponent(noticeIds.join(","))}`;
@@ -189,6 +191,15 @@ export async function saveFetchState(
     headers: getAuthHeaders(),
     body: JSON.stringify(state),
   });
+}
+
+/** Fetch full saved opportunities from DB */
+export async function fetchSavedOpportunities(): Promise<{ opportunities: Opportunity[] }> {
+  const resp = await fetch(`${API_BASE}/saved-opportunities/full`, {
+    headers: getAuthHeaders(),
+  });
+  if (!resp.ok) return { opportunities: [] };
+  return resp.json();
 }
 
 /** Load fetch pagination state (auth token identifies user) */

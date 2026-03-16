@@ -20,12 +20,20 @@ import { usePipeline } from "@/context/PipelineContext";
 import AppIcon from "@/components/AppIcon";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-// AI Summary opens in new tab
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
   onViewDetails: (opportunity: Opportunity) => void;
 }
+
+const BID_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  RFP: { bg: "#dc2626", text: "#ffffff", border: "#b91c1c" },
+  RFQ: { bg: "#d97706", text: "#ffffff", border: "#b45309" },
+  RFI: { bg: "#7c3aed", text: "#ffffff", border: "#6d28d9" },
+  RFO: { bg: "#0891b2", text: "#ffffff", border: "#0e7490" },
+  "Sources Sought": { bg: "#4f46e5", text: "#ffffff", border: "#4338ca" },
+  "Special Notice": { bg: "#64748b", text: "#ffffff", border: "#475569" },
+};
 
 export default function OpportunityCard({
   opportunity,
@@ -37,6 +45,9 @@ export default function OpportunityCard({
   const { addToPipeline, isInPipeline } = usePipeline();
   const inPipeline = isInPipeline(opportunity.id);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const bidType = opportunity.bidType;
+  const bidTypeStyle = bidType ? BID_TYPE_COLORS[bidType] || BID_TYPE_COLORS["RFP"] : null;
 
   return (
     <div
@@ -54,6 +65,20 @@ export default function OpportunityCard({
         </div>
       )}
 
+      {/* Bid Type label - top left prominent */}
+      {bidType && bidTypeStyle && (
+        <div
+          className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-extrabold uppercase tracking-wide shadow-sm"
+          style={{
+            backgroundColor: bidTypeStyle.bg,
+            color: bidTypeStyle.text,
+            border: `1px solid ${bidTypeStyle.border}`,
+          }}
+        >
+          {bidType}
+        </div>
+      )}
+
       {/* Go/No-Go top accent bar */}
       <div
         className={`h-1.5 w-full ${
@@ -61,12 +86,12 @@ export default function OpportunityCard({
         }`}
       />
 
-      <div className="p-5">
+      <div className="p-3.5 sm:p-5">
         {/* Header row: badge + save */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className={`flex items-start justify-between mb-2 sm:mb-3 ${bidType ? "mt-6 sm:mt-7" : ""}`}>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <span
-              className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${
+              className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide ${
                 isGo
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-700"
@@ -74,14 +99,14 @@ export default function OpportunityCard({
             >
               AI: {opportunity.status}
             </span>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700">
+            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold bg-blue-50 text-blue-700">
               {opportunity.type}
             </span>
           </div>
           <button
             onClick={(e) => {
               e.stopPropagation();
-              toggle(opportunity.id);
+              toggle(opportunity.id, opportunity.noticeId);
             }}
             className={`transition-colors ${
               saved
@@ -95,20 +120,20 @@ export default function OpportunityCard({
         </div>
 
         {/* Title */}
-        <h3 className="text-[15px] font-bold text-slate-950 leading-snug mb-2 line-clamp-2 group-hover:text-blue-800 transition-colors">
+        <h3 className="text-[13px] sm:text-[15px] font-bold text-slate-950 leading-snug mb-1.5 sm:mb-2 line-clamp-2 group-hover:text-blue-800 transition-colors">
           {opportunity.title}
         </h3>
 
         {/* Summary */}
-        <p className="text-[13px] text-slate-600 leading-relaxed mb-3 line-clamp-3">
+        <p className="text-[11px] sm:text-[13px] text-slate-600 leading-relaxed mb-2 sm:mb-3 line-clamp-3">
           {opportunity.summary}
         </p>
 
         {/* Meta row */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500 mb-4 font-semibold">
+        <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 sm:gap-y-1.5 text-[10px] sm:text-[11px] text-slate-500 mb-3 sm:mb-4 font-semibold">
           <span className="flex items-center gap-1">
             <Building2 className="w-3 h-3" strokeWidth={2.1} />
-            {opportunity.agency}
+            <span className="truncate max-w-[100px] sm:max-w-none">{opportunity.agency}</span>
           </span>
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" strokeWidth={2.1} />
@@ -121,14 +146,14 @@ export default function OpportunityCard({
         </div>
 
         {/* AI Analysis Breakdown */}
-        <div className="bg-slate-50 rounded-xl px-3 py-2.5 mb-4 border border-slate-200/80">
-          <div className="flex items-center gap-1.5 mb-2">
+        <div className="bg-slate-50 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 mb-3 sm:mb-4 border border-slate-200/80">
+          <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2">
             <AppIcon icon={Sparkles} size="sm" tone="blue" />
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.18em]">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-[0.18em]">
               AI Analysis
             </span>
             {opportunity.complianceScore != null && (
-              <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              <span className={`ml-auto text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 opportunity.complianceScore >= 70 ? "bg-green-100 text-green-700" :
                 opportunity.complianceScore >= 50 ? "bg-amber-100 text-amber-700" :
                 "bg-red-100 text-red-700"
@@ -137,23 +162,23 @@ export default function OpportunityCard({
               </span>
             )}
           </div>
-          <p className="text-[12px] text-slate-600 leading-snug line-clamp-3">
+          <p className="text-[11px] sm:text-[12px] text-slate-600 leading-snug line-clamp-3">
             {opportunity.aiReason}
           </p>
-          <div className="mt-2 pt-2 border-t border-slate-200/60 grid grid-cols-3 gap-1">
+          <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-slate-200/60 grid grid-cols-3 gap-1">
             <div className="text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase">Set-Aside</div>
-              <div className="text-[10px] font-semibold text-slate-700 truncate" title={opportunity.setAside}>
+              <div className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Set-Aside</div>
+              <div className="text-[9px] sm:text-[10px] font-semibold text-slate-700 truncate" title={opportunity.setAside}>
                 {opportunity.setAside?.replace(/\s*\(.*\)/, "").split(" ").slice(0, 3).join(" ") || "Open"}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase">NAICS</div>
-              <div className="text-[10px] font-semibold text-slate-700">{opportunity.naicsCode}</div>
+              <div className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">NAICS</div>
+              <div className="text-[9px] sm:text-[10px] font-semibold text-slate-700">{opportunity.naicsCode}</div>
             </div>
             <div className="text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase">Location</div>
-              <div className="text-[10px] font-semibold text-slate-700 truncate" title={opportunity.placeOfPerformance}>
+              <div className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Location</div>
+              <div className="text-[9px] sm:text-[10px] font-semibold text-slate-700 truncate" title={opportunity.placeOfPerformance}>
                 {opportunity.placeOfPerformance?.split(",")[0] || "N/A"}
               </div>
             </div>
@@ -162,17 +187,17 @@ export default function OpportunityCard({
 
         {/* AI Predicted Bid Price */}
         {opportunity.pricingPrediction?.predictedBid ? (
-          <div className="bg-emerald-50 rounded-xl px-3 py-2.5 mb-4 border border-emerald-200/80">
+          <div className="bg-emerald-50 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 mb-3 sm:mb-4 border border-emerald-200/80">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center">
                   <DollarSign className="w-2.5 h-2.5 text-emerald-600" strokeWidth={2.5} />
                 </div>
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.18em]">
+                <span className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-[0.18em]">
                   AI Predicted Bid
                 </span>
               </div>
-              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+              <span className={`text-[8px] sm:text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
                 opportunity.pricingPrediction.confidence === "high"
                   ? "bg-emerald-200 text-emerald-800"
                   : opportunity.pricingPrediction.confidence === "medium"
@@ -183,48 +208,49 @@ export default function OpportunityCard({
               </span>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-extrabold text-emerald-700">
+              <span className="text-base sm:text-lg font-extrabold text-emerald-700">
                 {formatContractValue(opportunity.pricingPrediction.predictedBid)}
               </span>
-              <span className="text-[10px] text-emerald-600 font-medium">
+              <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
                 recommended
               </span>
             </div>
             <div className="flex items-center gap-1 mt-0.5">
               <TrendingUp className="w-3 h-3 text-emerald-500" strokeWidth={2} />
-              <span className="text-[10px] text-emerald-600">
+              <span className="text-[9px] sm:text-[10px] text-emerald-600">
                 Range: {formatContractValue(opportunity.pricingPrediction.lowBid)} – {formatContractValue(opportunity.pricingPrediction.highBid)}
               </span>
             </div>
           </div>
         ) : (
-          <div className="bg-slate-50 rounded-xl px-3 py-2.5 mb-4 border border-slate-200/80">
+          <div className="bg-slate-50 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 mb-3 sm:mb-4 border border-slate-200/80">
             <div className="flex items-center gap-1.5 mb-1">
               <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center">
                 <DollarSign className="w-2.5 h-2.5 text-slate-400" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.18em]">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-[0.18em]">
                 AI Bid Pricing
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-snug">
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-snug">
               {opportunity.pricingPrediction?.reasoning || "No incumbent contract found for this opportunity. Manual pricing analysis recommended."}
             </p>
           </div>
         )}
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               localStorage.setItem("arber_summary_opportunity", JSON.stringify(opportunity));
               window.open("/opportunities/summary", "_blank");
             }}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#182434] hover:bg-[#223247] text-white text-xs font-semibold rounded-xl transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-[#182434] hover:bg-[#223247] text-white text-[10px] sm:text-xs font-semibold rounded-xl transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5" strokeWidth={2.1} />
-            AI Summarize
+            <Sparkles className="w-3 sm:w-3.5 h-3 sm:h-3.5" strokeWidth={2.1} />
+            <span className="hidden sm:inline">AI Summarize</span>
+            <span className="sm:hidden">Summary</span>
           </button>
           <button
             onClick={async (e) => {
@@ -235,7 +261,6 @@ export default function OpportunityCard({
                 window.open(withUrl[0].url, "_blank");
                 return;
               }
-              // Multiple files → download as ZIP
               try {
                 const JSZip = (await import("jszip")).default;
                 const zip = new JSZip();
@@ -255,21 +280,20 @@ export default function OpportunityCard({
                 link.click();
                 URL.revokeObjectURL(url);
               } catch {
-                // Fallback: open all in tabs
                 withUrl.forEach((a) => window.open(a.url, "_blank"));
               }
             }}
             disabled={!opportunity.attachments.some((a) => a.url)}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 text-[10px] sm:text-xs font-semibold rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <Download className="w-3.5 h-3.5" strokeWidth={2.1} />
+            <Download className="w-3 sm:w-3.5 h-3 sm:h-3.5" strokeWidth={2.1} />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               if (!inPipeline) addToPipeline(opportunity);
             }}
-            className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+            className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold rounded-lg transition-colors ${
               inPipeline
                 ? "bg-green-100 text-green-800 cursor-default"
                 : "bg-orange-500 hover:bg-orange-600 text-white"
@@ -278,12 +302,13 @@ export default function OpportunityCard({
           >
             {inPipeline ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                In Pipeline
+                <CheckCircle2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                <span className="hidden sm:inline">In Pipeline</span>
+                <span className="sm:hidden">Done</span>
               </>
             ) : (
               <>
-                <Play className="w-3.5 h-3.5" />
+                <Play className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                 Pipeline
               </>
             )}

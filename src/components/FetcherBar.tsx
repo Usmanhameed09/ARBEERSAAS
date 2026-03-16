@@ -9,6 +9,7 @@ import {
   Calendar,
   Filter,
   Tag,
+  Timer,
 } from "lucide-react";
 import { NAICS_CODES as BASE_NAICS_CODES } from "@/data/opportunities";
 import AppIcon from "@/components/AppIcon";
@@ -27,6 +28,7 @@ export interface FetchOptions {
   naicsCodes: string[];
   noticeTypes: string;
   setAside: string;
+  minDaysUntilDue: number;
 }
 
 const DATE_RANGES = [
@@ -57,6 +59,16 @@ const SET_ASIDE_OPTIONS = [
   { value: "EDWOSB", label: "EDWOSB Set-Aside" },
 ];
 
+const MIN_DAYS_OPTIONS = [
+  { value: 0, label: "No Filter" },
+  { value: 7, label: "7 days" },
+  { value: 14, label: "14 days" },
+  { value: 21, label: "21 days" },
+  { value: 30, label: "30 days" },
+  { value: 45, label: "45 days" },
+  { value: 60, label: "60 days" },
+];
+
 export default function FetcherBar({
   lastFetchTime,
   isScanning,
@@ -70,6 +82,7 @@ export default function FetcherBar({
   const [selectedNaics, setSelectedNaics] = useState<string[]>([]);
   const [selectedNoticeTypes, setSelectedNoticeTypes] = useState<string[]>(["k", "o", "p"]);
   const [selectedSetAside, setSelectedSetAside] = useState("");
+  const [minDaysUntilDue, setMinDaysUntilDue] = useState(14);
   const initializedRef = useRef(false);
 
   // Load saved filters from localStorage on mount
@@ -81,10 +94,11 @@ export default function FetcherBar({
         if (f.dateRange) setDateRange(f.dateRange);
         if (f.naicsCodes?.length > 0) {
           setSelectedNaics(f.naicsCodes);
-          initializedRef.current = true; // Don't override with profile codes
+          initializedRef.current = true;
         }
         if (f.noticeTypes?.length > 0) setSelectedNoticeTypes(f.noticeTypes);
         if (f.setAside !== undefined) setSelectedSetAside(f.setAside);
+        if (f.minDaysUntilDue !== undefined) setMinDaysUntilDue(f.minDaysUntilDue);
       }
     } catch { /* ignore */ }
   }, []);
@@ -98,9 +112,10 @@ export default function FetcherBar({
         naicsCodes: selectedNaics,
         noticeTypes: selectedNoticeTypes,
         setAside: selectedSetAside,
+        minDaysUntilDue,
       }));
     } catch { /* ignore */ }
-  }, [dateRange, selectedNaics, selectedNoticeTypes, selectedSetAside]);
+  }, [dateRange, selectedNaics, selectedNoticeTypes, selectedSetAside, minDaysUntilDue]);
 
   // Load profile NAICS codes as defaults (once only, if no saved filters)
   useEffect(() => {
@@ -110,13 +125,12 @@ export default function FetcherBar({
     }
   }, [profileNaicsCodes]);
 
-  // Merge profile NAICS codes into the display list (profile codes first, then rest)
+  // Merge profile NAICS codes into the display list
   const allNaicsCodes = (() => {
     const baseCodes = new Set(BASE_NAICS_CODES.map((n) => n.code));
     const profileOnly = (profileNaicsCodes || [])
       .filter((code) => !baseCodes.has(code))
       .map((code) => ({ code, label: `NAICS ${code}` }));
-    // Profile codes first (highlighted), then the rest
     const profileSet = new Set(profileNaicsCodes || []);
     const profileItems = [...profileOnly, ...BASE_NAICS_CODES.filter((n) => profileSet.has(n.code))];
     const otherItems = BASE_NAICS_CODES.filter((n) => !profileSet.has(n.code));
@@ -125,17 +139,13 @@ export default function FetcherBar({
 
   const toggleNaics = (code: string) => {
     setSelectedNaics((prev) =>
-      prev.includes(code)
-        ? prev.filter((c) => c !== code)
-        : [...prev, code]
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
   };
 
   const toggleNoticeType = (code: string) => {
     setSelectedNoticeTypes((prev) =>
-      prev.includes(code)
-        ? prev.filter((c) => c !== code)
-        : [...prev, code]
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
   };
 
@@ -146,6 +156,7 @@ export default function FetcherBar({
       naicsCodes: selectedNaics,
       noticeTypes: selectedNoticeTypes.join(","),
       setAside: selectedSetAside,
+      minDaysUntilDue,
     });
   };
 
@@ -154,12 +165,12 @@ export default function FetcherBar({
   return (
     <div className="bg-white rounded-[1.15rem] border border-slate-200/70 shadow-[0_10px_28px_rgba(15,23,42,0.06)] mb-5">
       {/* Main bar */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
           {/* Last fetch info */}
-          <div className="flex items-center gap-2 text-[13px] text-slate-600 font-semibold">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-[13px] text-slate-600 font-semibold min-w-0">
             <AppIcon icon={Clock} size="sm" tone="slate" />
-            <span>
+            <span className="truncate">
               Last scan:{" "}
               <span className="font-bold text-slate-900">
                 {lastFetchTime || "Never"}
@@ -169,22 +180,22 @@ export default function FetcherBar({
 
           {/* New count badge */}
           {newCount > 0 && (
-            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase shrink-0">
               {newCount} New
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           {/* Filter toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                showFilters
-                  ? "bg-[#182434] text-white border-[#182434]"
-                  : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+              showFilters
+                ? "bg-[#182434] text-white border-[#182434]"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+            }`}
+          >
             <Filter className="w-3.5 h-3.5" strokeWidth={2.1} />
             Filters
             {showFilters ? (
@@ -198,23 +209,28 @@ export default function FetcherBar({
           <button
             onClick={handleScan}
             disabled={isBusy || selectedNaics.length === 0}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
           >
             <Search
               className={`w-3.5 h-3.5 ${isScanning ? "animate-pulse" : ""}`}
             />
-            {isScanning
-              ? "Scanning SAM.gov..."
-              : isAnalyzing
-                ? "Analyzing..."
-                : "Scan SAM.gov"}
+            <span className="hidden sm:inline">
+              {isScanning
+                ? "Scanning SAM.gov..."
+                : isAnalyzing
+                  ? "Analyzing..."
+                  : "Scan SAM.gov"}
+            </span>
+            <span className="sm:hidden">
+              {isScanning ? "Scanning..." : isAnalyzing ? "Analyzing..." : "Scan"}
+            </span>
           </button>
         </div>
       </div>
 
       {/* Expandable filters */}
       {showFilters && (
-        <div className="px-4 pb-4 pt-1 border-t border-slate-200/80">
+        <div className="px-3 sm:px-4 pb-4 pt-1 border-t border-slate-200/80">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
             {/* Date range */}
             <div>
@@ -227,7 +243,7 @@ export default function FetcherBar({
                   <button
                     key={range.value}
                     onClick={() => setDateRange(range.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-all cursor-pointer ${
                       dateRange === range.value
                         ? "bg-blue-600 text-white"
                         : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -237,7 +253,7 @@ export default function FetcherBar({
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5">
                 Filters by when opportunities were posted on SAM.gov
               </p>
             </div>
@@ -259,10 +275,10 @@ export default function FetcherBar({
                     return (
                       <span
                         key={code}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold"
+                        className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold"
                         style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
                       >
-                        {code} – {naics?.label || `NAICS ${code}`}
+                        <span className="truncate max-w-[120px] sm:max-w-none">{code} – {naics?.label || `NAICS ${code}`}</span>
                         <button
                           onClick={() => toggleNaics(code)}
                           className="ml-0.5 font-bold cursor-pointer"
@@ -312,7 +328,7 @@ export default function FetcherBar({
                   className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 border border-slate-200 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition placeholder-slate-400"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5">
                 Auto-loaded from your company profile. Select from dropdown or type a code and press Enter.
               </p>
             </div>
@@ -331,7 +347,7 @@ export default function FetcherBar({
                   <button
                     key={nt.code}
                     onClick={() => toggleNoticeType(nt.code)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                    className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-medium transition-all cursor-pointer ${
                       selectedNoticeTypes.includes(nt.code)
                         ? "bg-blue-600 text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -360,8 +376,37 @@ export default function FetcherBar({
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-slate-500 mt-1.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5">
                 Default: All types. Select to filter small business set-asides.
+              </p>
+            </div>
+
+            {/* Min Days Until Due */}
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-[0.18em] mb-2">
+                <Timer className="w-3 h-3" strokeWidth={2.1} />
+                Minimum Days Until Due
+                <span className="text-[10px] font-medium normal-case text-slate-500 tracking-normal">
+                  (skip bids due sooner than this)
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {MIN_DAYS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setMinDaysUntilDue(opt.value)}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-all cursor-pointer ${
+                      minDaysUntilDue === opt.value
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5">
+                Opportunities with due dates sooner than this will be excluded from scan results. Default: 14 days.
               </p>
             </div>
           </div>

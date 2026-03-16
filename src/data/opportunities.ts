@@ -61,6 +61,7 @@ export interface Opportunity {
     ruleName: string;
     severity: string;
   }[];
+  bidType?: "RFP" | "RFQ" | "RFI" | "RFO" | "Sources Sought" | "Special Notice" | null;
 }
 
 export const NAICS_CODES = [
