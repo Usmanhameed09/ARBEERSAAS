@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, Radar } from "lucide-react";
+import { Search, Radar, Archive } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { NAICS_CODES } from "@/data/opportunities";
 import {
@@ -10,6 +10,7 @@ import {
   streamOpportunities,
   loadFetchState,
   saveFetchState,
+  loadOpportunitiesFromDB,
 } from "@/lib/api";
 import type { ScanResult } from "@/lib/api";
 import OpportunityCard from "@/components/OpportunityCard";
@@ -18,9 +19,11 @@ import FetcherBar from "@/components/FetcherBar";
 import ScanResultsBar from "@/components/ScanResultsBar";
 import type { FetchOptions } from "@/components/FetcherBar";
 import { useAuth } from "@/context/AuthContext";
+import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 
 function OpportunitiesContent() {
   const { user, companyProfile } = useAuth();
+  const { savedIds } = useSavedOpportunities();
 
   // UI state
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -29,6 +32,7 @@ function OpportunitiesContent() {
 
   // Data state — starts EMPTY, only populated by current scan session
   const [allOpportunities, setAllOpportunities] = useState<Opportunity[]>([]);
+  const [archivedOpportunities, setArchivedOpportunities] = useState<Opportunity[]>([]);
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
   const [totalOnSam, setTotalOnSam] = useState<number | null>(null);
 
@@ -45,12 +49,20 @@ function OpportunitiesContent() {
   const userId = user?.id ?? null;
   const profileNaicsCodes = companyProfile?.naicsCodes || [];
 
-  // Load last fetch time from DB (just for display, NOT opportunities)
+  // Load last fetch time + archived opportunities from DB on mount
   useEffect(() => {
     if (!userId) return;
     loadFetchState(userId).then((state) => {
       if (state.lastFetchTime) setLastFetchTime(state.lastFetchTime);
       if (state.totalOnSam) setTotalOnSam(state.totalOnSam);
+    }).catch(() => {});
+
+    // Load archived (all previously scanned, non-saved) from DB
+    loadOpportunitiesFromDB(userId).then((data) => {
+      const opps = data.opportunities || [];
+      // Filter out saved ones — those belong in Saved page only
+      const archived = opps.filter((o: Opportunity & { isSaved?: boolean }) => !o.isSaved);
+      setArchivedOpportunities(archived);
     }).catch(() => {});
   }, [userId]);
 
@@ -236,6 +248,22 @@ function OpportunitiesContent() {
   const goOpps = filtered.filter((o) => o.status === "Go");
   const noGoOpps = filtered.filter((o) => o.status === "No-Go");
   const hasResults = allOpportunities.length > 0;
+  const isArchivedTab = activeTab === "archived";
+
+  // Archived filtering (same search logic)
+  const filteredArchived = archivedOpportunities.filter((opp) => {
+    // Exclude any that are in the current scan session (avoid duplicates)
+    if (allOpportunities.some((o) => o.noticeId === opp.noticeId)) return false;
+    // Exclude saved ones reactively
+    if (savedIds.has(opp.id)) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return opp.title.toLowerCase().includes(q) || opp.agency.toLowerCase().includes(q) || opp.naicsCode.includes(searchQuery);
+    }
+    return true;
+  });
+  const archivedGo = filteredArchived.filter((o) => o.status === "Go");
+  const archivedNoGo = filteredArchived.filter((o) => o.status === "No-Go");
 
   return (
     <div className="p-3 sm:p-5">
@@ -314,12 +342,12 @@ function OpportunitiesContent() {
         </div>
       )}
 
-      {/* Dynamic NAICS Tabs */}
-      {tabs.length > 0 && (
+      {/* Dynamic NAICS Tabs + Archived Tab */}
+      {(tabs.length > 0 || archivedOpportunities.length > 0) && (
         <div className="mb-5 overflow-x-auto">
           <div className="flex gap-2 pb-1 min-w-0">
             {tabs.map((tab) => {
-              const isActive = effectiveTab === tab.key;
+              const isActive = effectiveTab === tab.key && !isArchivedTab;
               return (
                 <button
                   key={tab.key}
@@ -369,12 +397,105 @@ function OpportunitiesContent() {
                 </button>
               );
             })}
+
+            {/* Archived Tab */}
+            {filteredArchived.length > 0 && (
+              <button
+                onClick={() => setActiveTab("archived")}
+                className="shrink-0 group cursor-pointer"
+              >
+                <div
+                  className={`rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 border-2 transition-all ${
+                    isArchivedTab
+                      ? "bg-slate-700 border-slate-700 shadow-lg shadow-slate-900/10"
+                      : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                  }`}
+                  style={{ minWidth: "120px" }}
+                >
+                  <div className={`flex items-center gap-1.5 mb-0.5`}>
+                    <Archive className={`w-3.5 h-3.5 ${isArchivedTab ? "text-white" : "text-slate-500"}`} strokeWidth={2.2} />
+                    <span className={`text-[13px] sm:text-sm font-extrabold ${isArchivedTab ? "text-white" : "text-slate-800"}`}>
+                      Archived
+                    </span>
+                  </div>
+                  <div className={`text-[9px] sm:text-[10px] leading-tight mb-2 ${isArchivedTab ? "text-slate-400" : "text-slate-500"}`}>
+                    {filteredArchived.length} previous results
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold ${
+                        isArchivedTab
+                          ? "bg-green-500/20 text-green-300"
+                          : "bg-green-50 text-green-700 border border-green-200"
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
+                      {archivedGo.length}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold ${
+                        isArchivedTab
+                          ? "bg-red-500/20 text-red-300"
+                          : "bg-red-50 text-red-700 border border-red-200"
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
+                      {archivedNoGo.length}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {/* Cards */}
-      {hasResults ? (
+      {isArchivedTab ? (
+        /* ── Archived Tab Content ── */
+        filteredArchived.length > 0 ? (
+          <>
+            {archivedGo.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-green-500 ring-4 ring-green-500/10" />
+                  <h2 className="text-sm sm:text-[15px] font-bold text-gray-800">
+                    Go <span className="text-gray-400 font-medium">({archivedGo.length})</span>
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+                  {archivedGo.map((opp) => (
+                    <OpportunityCard key={opp.id} opportunity={opp} onViewDetails={setSelectedOpp} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {archivedNoGo.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/10" />
+                  <h2 className="text-sm sm:text-[15px] font-bold text-gray-800">
+                    No-Go <span className="text-gray-400 font-medium">({archivedNoGo.length})</span>
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+                  {archivedNoGo.map((opp) => (
+                    <OpportunityCard key={opp.id} opportunity={opp} onViewDetails={setSelectedOpp} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
+            <Archive className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities</p>
+            <p className="text-xs text-gray-400">
+              Previously scanned opportunities that you didn&apos;t save will appear here.
+            </p>
+          </div>
+        )
+      ) : hasResults ? (
         <>
           {/* Go section */}
           {goOpps.length > 0 && (
