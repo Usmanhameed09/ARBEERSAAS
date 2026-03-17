@@ -117,19 +117,19 @@ function SectionShell({
 }) {
   return (
     <section className="rounded-[1.35rem] border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.05)]">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+      <div className="flex items-start justify-between gap-3 sm:gap-4 border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-5">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl bg-slate-100 shrink-0">
             <AppIcon icon={icon} size="sm" tone="blue" />
           </div>
           <div>
-            <h2 className="text-[18px] font-bold text-slate-950">{title}</h2>
-            <p className="text-[13px] text-slate-500">{description}</p>
+            <h2 className="text-sm sm:text-[18px] font-bold text-slate-950">{title}</h2>
+            <p className="text-[11px] sm:text-[13px] text-slate-500">{description}</p>
           </div>
         </div>
         {action}
       </div>
-      <div className="px-6 py-6">{children}</div>
+      <div className="px-4 sm:px-6 py-4 sm:py-6">{children}</div>
     </section>
   );
 }
@@ -302,21 +302,21 @@ export default function CompanyProfileForm() {
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_55%,#fffaf2_100%)] shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-        <div className="grid grid-cols-[minmax(0,1fr)_240px] gap-6 px-7 py-7">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] gap-4 sm:gap-6 px-4 sm:px-7 py-4 sm:py-7">
           <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-sky-800">
+            <div className="mb-3 sm:mb-4 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-sky-800">
               <Sparkles className="h-3.5 w-3.5" strokeWidth={2.1} />
               Company Profile
             </div>
-            <h1 className="max-w-3xl text-[32px] font-bold leading-[1.08] text-slate-950">
+            <h1 className="max-w-3xl text-xl sm:text-[32px] font-bold leading-[1.08] text-slate-950">
               Build the company profile ARBER uses to find and qualify opportunities.
             </h1>
-            <p className="mt-3 max-w-3xl text-[15px] leading-7 text-slate-600">
+            <p className="mt-2 sm:mt-3 max-w-3xl text-xs sm:text-[15px] leading-5 sm:leading-7 text-slate-600">
               Keep this focused. Contact details, business description, and NAICS codes
               are the three main inputs that drive profile quality.
             </p>
 
-            <div className="mt-6 grid max-w-3xl grid-cols-3 gap-3">
+            <div className="mt-4 sm:mt-6 grid max-w-3xl grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
                   Company
@@ -389,7 +389,7 @@ export default function CompanyProfileForm() {
         title="General Profile"
         description="Primary contact details used in ARBER."
       >
-        <div className="grid grid-cols-[240px_minmax(0,1fr)] gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-4 sm:gap-6">
           <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-5">
             <div className="flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-[#1b2a3a] text-xl font-bold text-white">
               {profile.contactName
@@ -406,7 +406,7 @@ export default function CompanyProfileForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5">
             <div>
               <FieldLabel
                 label="Primary Contact"
@@ -463,7 +463,7 @@ export default function CompanyProfileForm() {
         }
       >
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5">
             <div>
               <FieldLabel
                 label="Company Name"
@@ -518,7 +518,7 @@ export default function CompanyProfileForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px] gap-3 sm:gap-5">
             <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-5">
               <div className="mb-4 flex items-center gap-3">
                 <AppIcon icon={FileText} size="sm" tone="blue" />
@@ -593,7 +593,7 @@ export default function CompanyProfileForm() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[300px_minmax(0,1fr)] gap-0">
+            <div className="grid grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)] gap-0">
               <div className="border-r border-slate-200 p-5">
                 <FieldLabel label="Search Codes" hint="Search by code or industry name." />
                 <div className="relative">
@@ -667,7 +667,7 @@ export default function CompanyProfileForm() {
                 <p className="mb-3 text-[12px] font-semibold text-slate-700">
                   Available Codes
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   {filteredNaics.map((item) => {
                     const isSelected = selectedNaics.includes(item.code);
 
@@ -738,7 +738,7 @@ export default function CompanyProfileForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5">
             <div>
               <FieldLabel label="UEI (Unique Entity Identifier)" hint="Assigned by SAM.gov upon registration." required />
               <TextInput value={profile.uei} onChange={(value) => updateProfile("uei", value)} />
@@ -774,7 +774,7 @@ export default function CompanyProfileForm() {
         description="Coverage details required for federal contract compliance."
       >
         <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="w-4 h-4 text-emerald-600" />
@@ -801,7 +801,7 @@ export default function CompanyProfileForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5">
             <div>
               <FieldLabel label="Bonding Capacity" hint="Maximum single-contract bond amount." required />
               <TextInput value={profile.bondingCapacity} onChange={(value) => updateProfile("bondingCapacity", value)} icon={DollarSign} />
@@ -837,7 +837,7 @@ export default function CompanyProfileForm() {
         description="Key metrics that strengthen your proposal positioning."
       >
         <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
             <div>
               <FieldLabel label="Years in Business" />
               <TextInput value={profile.yearsInBusiness} onChange={(value) => updateProfile("yearsInBusiness", value)} />
@@ -892,7 +892,7 @@ export default function CompanyProfileForm() {
                         <Trash2 className="w-3.5 h-3.5 text-red-400" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                       <div>
                         <FieldLabel label="Contract Name" />
                         <TextInput

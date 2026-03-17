@@ -134,7 +134,7 @@ export default function PipelineDetailPage({
 
   if (!item) {
     return (
-      <div className="p-5">
+      <div className="p-3 sm:p-5">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
           <p className="text-sm text-gray-500 mb-3">
             Pipeline item not found. It may have been removed.
@@ -161,7 +161,7 @@ export default function PipelineDetailPage({
   const hours = Math.max(0, Math.floor((diffMs % 86400000) / 3600000));
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
         <Link href="/opportunities" className="hover:text-blue-600">
@@ -295,7 +295,7 @@ export default function PipelineDetailPage({
         {/* Left column */}
         <div className="space-y-5">
           {/* Compliance + Timeline row */}
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-5">
             {/* Compliance Checklist */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
@@ -395,7 +395,7 @@ export default function PipelineDetailPage({
           </div>
 
           {/* Subcontractor Pricing */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-900">
                 Subcontractor Pricing
@@ -537,7 +537,7 @@ export default function PipelineDetailPage({
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4">
               {[
                 {
                   label: "Technical Volume",

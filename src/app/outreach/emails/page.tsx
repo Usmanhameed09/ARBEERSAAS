@@ -51,10 +51,10 @@ export default function SentEmailsPage() {
   };
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Sent Emails</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">Sent Emails</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             Emails sent to contractors with contract details and documents
           </p>
@@ -91,7 +91,7 @@ export default function SentEmailsPage() {
       </p>
 
       {/* Email table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="bg-gray-50/80 text-left border-b border-gray-100">

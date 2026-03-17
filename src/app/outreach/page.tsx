@@ -40,10 +40,10 @@ export default function OutreachPage() {
   };
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Outreach</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">Outreach</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             AI-powered contractor outreach via calls and emails
           </p>
@@ -58,7 +58,7 @@ export default function OutreachPage() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -97,7 +97,7 @@ export default function OutreachPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-5">
         {/* Recent Calls */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -183,7 +183,7 @@ export default function OutreachPage() {
       </div>
 
       {/* Connection status */}
-      <div className="mt-5 grid grid-cols-2 gap-4">
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
             <Mail className="w-5 h-5 text-red-500" />

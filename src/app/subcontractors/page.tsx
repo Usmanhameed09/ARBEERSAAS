@@ -96,10 +96,10 @@ export default function SubcontractorsPage() {
   ];
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-bold text-gray-900">Subcontractors</h1>
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900">Subcontractors</h1>
         <button
           onClick={() => setShowAddModal(true)}
           className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -196,7 +196,7 @@ export default function SubcontractorsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="bg-gray-50/80 text-left border-b border-gray-100">

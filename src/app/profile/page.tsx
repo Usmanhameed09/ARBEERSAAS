@@ -7,7 +7,7 @@ const CompanyProfileForm = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="p-5">
+      <div className="p-3 sm:p-5">
         <div className="animate-pulse space-y-6">
           <div className="h-48 bg-gray-200 rounded-2xl" />
           <div className="h-64 bg-gray-200 rounded-2xl" />
@@ -19,7 +19,7 @@ const CompanyProfileForm = dynamic(
 
 export default function ProfilePage() {
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <CompanyProfileForm />
     </div>
   );

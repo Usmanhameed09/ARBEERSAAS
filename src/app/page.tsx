@@ -60,12 +60,12 @@ const statusCards = [
 
 export default function Dashboard() {
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       {/* Mission Control Header */}
-      <h1 className="text-xl font-bold text-gray-900 mb-4">Mission Control</h1>
+      <h1 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Mission Control</h1>
 
       {/* Status Cards - Individual cards in a row */}
-      <div className="grid grid-cols-6 gap-4 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-5">
         {statusCards.map((card) => (
           <StatusCard key={card.label} {...card} />
         ))}
@@ -75,7 +75,7 @@ export default function Dashboard() {
       <ActiveOpportunities />
 
       {/* Timeline */}
-      <div className="mt-5">
+      <div className="mt-4 sm:mt-5">
         <TimelinePanel />
       </div>
     </div>

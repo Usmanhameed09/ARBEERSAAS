@@ -9,7 +9,6 @@ import {
   Users,
   Megaphone,
   UserRound,
-  HelpCircle,
   ChevronRight,
   ChevronDown,
   Search,
@@ -20,8 +19,10 @@ import {
   PhoneCall,
   Mail,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 import { usePipeline } from "@/context/PipelineContext";
@@ -88,6 +89,22 @@ export default function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
     new Set(["Opportunities"])
   );
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
 
   const handleLogout = () => {
     logout();
@@ -106,19 +123,13 @@ export default function Sidebar() {
     });
   };
 
-  return (
-    <aside
-      className="fixed left-0 top-0 h-screen w-[260px] text-white flex flex-col z-50"
-      style={{
-        background: "linear-gradient(180deg, #17212e 0%, #223247 55%, #17202c 100%)",
-        boxShadow: "16px 0 40px rgba(15,23,42,0.16)",
-      }}
-    >
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="px-5 pt-5 pb-4">
+      <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl flex items-center justify-center"
             style={{
               background: "linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #93c5fd 100%)",
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 12px 24px rgba(8,47,73,0.28)",
@@ -133,16 +144,23 @@ export default function Sidebar() {
             </span>
           </div>
         </Link>
+        {/* Close button on mobile */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden p-2 -mr-2 rounded-lg hover:bg-white/10 transition-colors"
+        >
+          <X className="w-5 h-5 text-white/70" />
+        </button>
       </div>
 
       {/* Search */}
-      <div className="px-4 pb-4">
+      <div className="px-3 sm:px-4 pb-3 sm:pb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#94a3b8" }} strokeWidth={2.1} />
           <input
             type="text"
             placeholder="Search opportunities..."
-            className="w-full text-sm rounded-xl pl-9 pr-3 py-2.5 outline-none transition-colors"
+            className="w-full text-sm rounded-xl pl-9 pr-3 py-2.5 sm:py-2.5 outline-none transition-colors"
             style={{
               background: "rgba(255,255,255,0.08)",
               color: "#f1f5f9",
@@ -153,7 +171,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-2 sm:px-3 space-y-0.5 sm:space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -166,7 +184,7 @@ export default function Sidebar() {
               {hasSubItems ? (
                 <button
                   onClick={() => toggleExpand(item.label)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer"
+                  className="w-full flex items-center gap-2.5 sm:gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer"
                   style={{
                     background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
                     color: isActive ? "#fff" : "#e2e8f0",
@@ -186,7 +204,7 @@ export default function Sidebar() {
               ) : item.label === "Logout" ? (
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
+                  className="w-full flex items-center gap-2.5 sm:gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
                   style={{
                     background: "transparent",
                     color: "#e2e8f0",
@@ -198,7 +216,7 @@ export default function Sidebar() {
               ) : (
                 <Link
                   href={item.href}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
+                  className="w-full flex items-center gap-2.5 sm:gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
                   style={{
                     background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
                     color: isActive ? "#fff" : "#e2e8f0",
@@ -215,7 +233,7 @@ export default function Sidebar() {
 
               {/* Sub items */}
               {hasSubItems && isExpanded && (
-                <div className="ml-4 mt-1 space-y-0.5">
+                <div className="ml-3 sm:ml-4 mt-1 space-y-0.5">
                   {item.subItems!.map((sub) => {
                     const isSubActive = pathname === sub.href;
                     const badgeCount =
@@ -232,7 +250,7 @@ export default function Sidebar() {
                       <Link
                         key={sub.href}
                         href={sub.href}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150"
+                        className="flex items-center gap-2.5 px-3 py-2.5 sm:py-2 rounded-lg text-[13px] transition-all duration-150"
                         style={{
                           background: isSubActive ? "rgba(255,255,255,0.08)" : "transparent",
                           color: isSubActive ? "#fff" : "rgba(203,213,225,0.8)",
@@ -260,7 +278,7 @@ export default function Sidebar() {
       </nav>
 
       {/* User & Logout */}
-      <div className="px-3 pb-5 pt-2 space-y-1">
+      <div className="px-2 sm:px-3 pb-4 sm:pb-5 pt-2 space-y-1">
         {user && (
           <div className="flex items-center gap-3 px-3 py-2.5">
             <div
@@ -277,13 +295,58 @@ export default function Sidebar() {
         )}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer hover:bg-white/5"
+          className="w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm transition-colors cursor-pointer hover:bg-white/5"
           style={{ color: "rgba(203,213,225,0.8)" }}
         >
           <NavIcon icon={LogOut} active={false} />
           <span>Sign Out</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-xl bg-[#182434] text-white shadow-lg"
+        aria-label="Open menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile sidebar (slide-in) */}
+      <aside
+        className={`md:hidden fixed left-0 top-0 h-screen w-[280px] max-w-[85vw] text-white flex flex-col z-[70] transition-transform duration-300 ease-out ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        style={{
+          background: "linear-gradient(180deg, #17212e 0%, #223247 55%, #17202c 100%)",
+          boxShadow: "16px 0 40px rgba(15,23,42,0.3)",
+        }}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Desktop sidebar (always visible) */}
+      <aside
+        className="hidden md:flex fixed left-0 top-0 h-screen w-[260px] text-white flex-col z-50"
+        style={{
+          background: "linear-gradient(180deg, #17212e 0%, #223247 55%, #17202c 100%)",
+          boxShadow: "16px 0 40px rgba(15,23,42,0.16)",
+        }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

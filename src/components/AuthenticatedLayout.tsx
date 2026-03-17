@@ -52,7 +52,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   return (
     <>
       <Sidebar />
-      <div className="ml-[260px] min-h-screen bg-[#eef1f4]">
+      <div className="ml-0 md:ml-[260px] min-h-screen bg-[#eef1f4]">
         <TopBar />
         <main>{children}</main>
       </div>

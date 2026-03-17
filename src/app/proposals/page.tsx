@@ -75,10 +75,10 @@ export default function ProposalWorkspacePage() {
   });
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Proposal Workspace</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">Proposal Workspace</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             AI-generated proposal drafts ready for review and completion
           </p>
@@ -86,7 +86,7 @@ export default function ProposalWorkspacePage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-5">
         {[
           { label: "Total Drafts", value: proposalDrafts.length, color: "bg-slate-50 text-slate-700" },
           { label: "Ready for Review", value: proposalDrafts.filter((d) => d.status === "Ready for Review").length, color: "bg-green-50 text-green-700" },

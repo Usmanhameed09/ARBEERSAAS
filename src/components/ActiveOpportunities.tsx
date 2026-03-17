@@ -139,13 +139,13 @@ function SubStatusBadge({ status }: { status: string }) {
 export default function ActiveOpportunities() {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-gray-100">
-        <h2 className="text-sm font-bold text-gray-900">
+      <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-gray-100">
+        <h2 className="text-xs sm:text-sm font-bold text-gray-900">
           Active Opportunities
         </h2>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full text-[11px] sm:text-[13px]" style={{ minWidth: "600px" }}>
           <thead>
             <tr className="bg-gray-50/80 text-left border-b border-gray-100">
               <th className="px-5 py-2.5 font-semibold text-gray-500 text-[11px] uppercase tracking-wider">

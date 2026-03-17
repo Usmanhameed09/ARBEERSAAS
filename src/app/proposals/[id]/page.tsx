@@ -54,7 +54,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
 
   if (!draft) {
     return (
-      <div className="p-5">
+      <div className="p-3 sm:p-5">
         <p className="text-sm text-gray-400">Proposal not found.</p>
         <Link href="/proposals" className="text-xs text-blue-600 hover:underline mt-2 inline-block">
           Back to Proposals
@@ -84,7 +84,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const complianceTotal = draft.complianceMatrix.length;
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
         <Link href="/proposals" className="hover:text-blue-600 transition-colors">
@@ -120,7 +120,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         {/* Stats bar */}
-        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-5 gap-4">
+        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
           <div>
             <p className="text-[10px] text-gray-400 font-medium">Progress</p>
             <div className="flex items-center gap-2 mt-1">
@@ -332,7 +332,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       )}
 
       {activeTab === "compliance" && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
               <Shield className="w-4 h-4 text-blue-500" />

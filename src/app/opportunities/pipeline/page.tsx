@@ -18,11 +18,11 @@ export default function PipelineListPage() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center gap-2 mb-5">
         <GitBranch className="w-5 h-5 text-orange-500" />
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">Pipeline</h1>
           <p className="text-xs text-gray-500 mt-0.5">
             {pipelineItems.length} contract{pipelineItems.length !== 1 ? "s" : ""}{" "}
             in active pipeline

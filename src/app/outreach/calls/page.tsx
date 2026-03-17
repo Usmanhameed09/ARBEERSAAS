@@ -49,10 +49,10 @@ export default function CallLogPage() {
   };
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Call Log</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">Call Log</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             VAPI call summaries from contractor outreach
           </p>

@@ -86,7 +86,7 @@ export default function OutreachSettingsPage() {
   const labelClass = "block text-[11px] font-semibold text-gray-500 uppercase mb-1";
 
   return (
-    <div className="p-5 max-w-4xl">
+    <div className="p-3 sm:p-5 max-w-4xl">
       <div className="mb-5">
         <h1 className="text-xl font-bold text-gray-900">Outreach Settings</h1>
         <p className="text-xs text-gray-400 mt-0.5">
@@ -120,7 +120,7 @@ export default function OutreachSettingsPage() {
             )}
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>IMAP Server *</label>
@@ -197,7 +197,7 @@ export default function OutreachSettingsPage() {
             )}
           </div>
 
-          <div className="p-6 space-y-5">
+          <div className="p-4 sm:p-6 space-y-5">
             {/* API Key */}
             <div>
               <label className={labelClass}>VAPI API Key *</label>
@@ -339,7 +339,7 @@ export default function OutreachSettingsPage() {
             <h2 className="text-sm font-bold text-gray-900">Outreach Behavior</h2>
             <p className="text-xs text-gray-400">Configure how the AI agent handles contractor outreach</p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
               <div>
