@@ -8,17 +8,27 @@ import { jsPDF } from "jspdf";
 import { formatContractValue } from "@/lib/usaspending";
 
 const API_BASE = "https://arbersaas.duckdns.org/api";
+// const API_BASE = "http://localhost:8000/api";
 
 interface AISummary {
   projectOverview: string;
   keyDeadlines: string;
-  requirementsSummary: string;
-  contactInfo: string;
-  complianceAssessment: string;
-  pricingIntelligence: string;
+  complianceGatekeepers: string;
+  scopeBreakdown: string;
+  laborRequirements: string;
+  pricingStructure: string;
+  evaluationCriteria: string;
+  risksRedFlags: string;
   incumbentCompetition: string;
   attachmentHighlights: string;
+  opportunityMapping: string;
+  actionPlan: string;
+  contactInfo: string;
   recommendation: string;
+  // Legacy fields for backward compatibility
+  requirementsSummary?: string;
+  complianceAssessment?: string;
+  pricingIntelligence?: string;
 }
 
 /**
@@ -52,35 +62,127 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   // 2. Generate PDF
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 18;
   const contentWidth = pageWidth - margin * 2;
   let y = 18;
 
   const checkPageBreak = (needed: number) => {
-    if (y + needed > 275) {
+    if (y + needed > pageHeight - 20) {
       doc.addPage();
-      y = 18;
+      // Mini header on continuation pages
+      doc.setFillColor(24, 36, 52);
+      doc.rect(0, 0, pageWidth, 10, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.text("ARBER AI Summary Report", margin, 7);
+      doc.text(`SOL: ${opp.noticeId}`, pageWidth - margin, 7, { align: "right" });
+      y = 16;
     }
   };
 
+  // Helper: write rich text with bullet support and paragraph spacing
+  const writeRichText = (text: string, startY: number): number => {
+    let cy = startY;
+    const paragraphs = text.split("\n");
+
+    for (const para of paragraphs) {
+      const trimmed = para.trim();
+      if (!trimmed) {
+        cy += 2; // Paragraph spacing
+        continue;
+      }
+
+      // Detect bullet points
+      const isBullet = /^[•\-\*]\s/.test(trimmed);
+      const bulletText = isBullet ? trimmed.replace(/^[•\-\*]\s*/, "") : trimmed;
+      const xOffset = isBullet ? margin + 8 : margin + 3;
+      const wrapWidth = isBullet ? contentWidth - 11 : contentWidth - 5;
+
+      // Detect CAPS labels like "MANDATORY REQUIREMENT:" or "KEY PERSONNEL:"
+      const capsMatch = bulletText.match(/^([A-Z][A-Z\s&/]+:)\s*(.*)/);
+
+      if (capsMatch) {
+        // Bold the label part
+        checkPageBreak(5);
+        if (isBullet) {
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(50, 50, 50);
+          doc.text("•", margin + 3, cy);
+        }
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(capsMatch[1], xOffset, cy);
+        const labelWidth = doc.getTextWidth(capsMatch[1]) + 1;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(50, 50, 50);
+        const restLines = doc.splitTextToSize(capsMatch[2], wrapWidth - labelWidth);
+        if (restLines.length > 0) {
+          doc.text(restLines[0], xOffset + labelWidth, cy);
+          cy += 4.2;
+          for (let i = 1; i < restLines.length; i++) {
+            checkPageBreak(5);
+            doc.text(restLines[i], xOffset, cy);
+            cy += 4.2;
+          }
+        } else {
+          cy += 4.2;
+        }
+      } else {
+        // Regular text or bullet
+        checkPageBreak(5);
+        if (isBullet) {
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(50, 50, 50);
+          doc.text("•", margin + 3, cy);
+        }
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(50, 50, 50);
+        const lines = doc.splitTextToSize(bulletText, wrapWidth);
+        for (const line of lines) {
+          checkPageBreak(5);
+          doc.text(line, xOffset, cy);
+          cy += 4.2;
+        }
+      }
+    }
+    return cy;
+  };
+
   // --- Header ---
-  doc.setFillColor(24, 36, 52); // #182434
-  doc.rect(0, 0, pageWidth, 38, "F");
+  doc.setFillColor(24, 36, 52);
+  doc.rect(0, 0, pageWidth, 40, "F");
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
+  doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
-  doc.text("ARBER - AI Summary Report", margin, 16);
-
-  doc.setFontSize(9);
+  doc.text("ARBER", margin, 14);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text(`Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, margin, 24);
+  doc.text("AI Opportunity Analysis Report", margin + 30, 14);
 
   doc.setFontSize(8);
-  doc.text(`Notice ID: ${opp.noticeId}`, margin, 30);
-  doc.text(`AI Recommendation: ${opp.status}  |  Compliance Score: ${opp.complianceScore}/100`, margin, 35);
+  doc.text(`Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, margin, 22);
 
-  y = 46;
+  doc.setFontSize(8);
+  doc.text(`Notice ID: ${opp.noticeId}  |  NAICS: ${opp.naicsCode}  |  Set-Aside: ${opp.setAside || "None"}`, margin, 28);
+
+  // Recommendation badge
+  const isGo = opp.status === "Go";
+  doc.setFillColor(isGo ? 16 : 180, isGo ? 120 : 50, isGo ? 80 : 50);
+  doc.roundedRect(pageWidth - margin - 40, 30, 40, 8, 2, 2, "F");
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.text(`AI: ${opp.status}  |  ${opp.complianceScore}/100`, pageWidth - margin - 38, 35.5);
+
+  y = 48;
 
   // --- Title ---
   doc.setTextColor(24, 36, 52);
@@ -94,10 +196,39 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100, 100, 100);
-  doc.text(`Agency: ${opp.agency}  |  NAICS: ${opp.naicsCode}  |  Set-Aside: ${opp.setAside}`, margin, y);
-  y += 4;
-  doc.text(`Due: ${opp.dueDate}  |  Posted: ${opp.postedDate}  |  Location: ${opp.placeOfPerformance}`, margin, y);
-  y += 8;
+  doc.text(`Agency: ${opp.agency}  |  Due: ${opp.dueDate}  |  Location: ${opp.placeOfPerformance}`, margin, y);
+  y += 6;
+
+  // --- Point of Contact Box ---
+  const poc = opportunity.pointOfContact;
+  if (poc && (poc.name || poc.email || poc.phone)) {
+    checkPageBreak(18);
+    doc.setFillColor(235, 245, 255);
+    doc.setDrawColor(180, 210, 245);
+    doc.roundedRect(margin, y, contentWidth, poc.phone ? 16 : 12, 2, 2, "FD");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 80, 160);
+    doc.text("POINT OF CONTACT", margin + 4, y + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+    let pocX = margin + 4;
+    const pocY = y + 9.5;
+    if (poc.name) {
+      doc.text(poc.name, pocX, pocY);
+      pocX += doc.getTextWidth(poc.name) + 8;
+    }
+    if (poc.email) {
+      doc.setTextColor(30, 80, 160);
+      doc.text(poc.email, pocX, pocY);
+      pocX += doc.getTextWidth(poc.email) + 8;
+      doc.setTextColor(50, 50, 50);
+    }
+    if (poc.phone) {
+      doc.text(poc.phone, pocX, pocY);
+    }
+    y += poc.phone ? 20 : 16;
+  }
 
   // --- Divider ---
   doc.setDrawColor(200, 200, 200);
@@ -105,57 +236,72 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   y += 6;
 
   // --- Sections ---
-  const sections: { title: string; content: string; color: [number, number, number] }[] = [
-    { title: "PROJECT OVERVIEW", content: summary.projectOverview, color: [24, 36, 52] },
-    { title: "KEY DEADLINES", content: summary.keyDeadlines, color: [180, 50, 50] },
-    { title: "REQUIREMENTS SUMMARY", content: summary.requirementsSummary, color: [24, 36, 52] },
-    { title: "CONTACT INFORMATION", content: summary.contactInfo, color: [24, 36, 52] },
-    { title: "COMPLIANCE & RISK ASSESSMENT", content: summary.complianceAssessment, color: [180, 120, 30] },
-    { title: "PRICING INTELLIGENCE", content: summary.pricingIntelligence, color: [16, 120, 80] },
-    { title: "INCUMBENT & COMPETITION", content: summary.incumbentCompetition, color: [100, 60, 150] },
-    { title: "ATTACHMENT HIGHLIGHTS", content: summary.attachmentHighlights, color: [50, 100, 180] },
-    { title: "RECOMMENDATION", content: summary.recommendation, color: [24, 36, 52] },
+  const sections: { title: string; content: string; color: [number, number, number]; num: string }[] = [
+    { num: "1", title: "PROJECT OVERVIEW", content: summary.projectOverview, color: [24, 36, 52] },
+    { num: "2", title: "KEY DEADLINES", content: summary.keyDeadlines, color: [180, 50, 50] },
+    { num: "3", title: "COMPLIANCE GATEKEEPERS", content: summary.complianceGatekeepers || summary.complianceAssessment || "", color: [180, 120, 30] },
+    { num: "4", title: "SCOPE OF WORK BREAKDOWN", content: summary.scopeBreakdown || summary.requirementsSummary || "", color: [24, 36, 52] },
+    { num: "5", title: "LABOR & RESOURCE REQUIREMENTS", content: summary.laborRequirements || "", color: [80, 60, 140] },
+    { num: "6", title: "PRICING & COST STRUCTURE", content: summary.pricingStructure || summary.pricingIntelligence || "", color: [16, 120, 80] },
+    { num: "7", title: "EVALUATION CRITERIA", content: summary.evaluationCriteria || "", color: [50, 100, 180] },
+    { num: "8", title: "RISKS & RED FLAGS", content: summary.risksRedFlags || "", color: [200, 60, 60] },
+    { num: "9", title: "INCUMBENT & COMPETITION", content: summary.incumbentCompetition, color: [100, 60, 150] },
+    { num: "10", title: "ATTACHMENT HIGHLIGHTS", content: summary.attachmentHighlights, color: [50, 100, 180] },
+    { num: "11", title: "OPPORTUNITY MAPPING", content: summary.opportunityMapping || "", color: [24, 100, 100] },
+    { num: "12", title: "ACTION PLAN", content: summary.actionPlan || "", color: [24, 36, 52] },
+    { num: "13", title: "CONTACT INFORMATION", content: summary.contactInfo, color: [100, 100, 100] },
+    { num: "14", title: "RECOMMENDATION", content: summary.recommendation, color: [24, 36, 52] },
   ];
 
   for (const section of sections) {
-    checkPageBreak(20);
+    if (!section.content) continue;
 
-    // Section header with colored left bar
+    checkPageBreak(16);
+
+    // Section number circle
     doc.setFillColor(...section.color);
-    doc.rect(margin, y - 1, 2, 6, "F");
+    doc.circle(margin + 3, y + 1.5, 3, "F");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text(section.num, margin + 3 - (section.num.length > 1 ? 1.5 : 0.8), y + 2.8);
 
+    // Section title
     doc.setTextColor(...section.color);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text(section.title, margin + 5, y + 3);
-    y += 8;
+    doc.text(section.title, margin + 9, y + 3);
 
-    // Section content
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    const lines = doc.splitTextToSize(section.content, contentWidth - 5);
-    for (const line of lines) {
-      checkPageBreak(5);
-      doc.text(line, margin + 5, y);
-      y += 4.2;
-    }
+    // Underline
+    doc.setDrawColor(...section.color);
+    doc.setLineWidth(0.3);
+    doc.line(margin + 9, y + 4.5, margin + 9 + doc.getTextWidth(section.title), y + 4.5);
+    doc.setLineWidth(0.2);
+    y += 9;
+
+    // Section content with rich formatting
+    y = writeRichText(section.content, y);
     y += 4;
   }
 
-  // --- AI Pricing Prediction ---
+  // --- AI Pricing Prediction Box ---
   if (opportunity.pricingPrediction && opportunity.pricingPrediction.predictedBid != null) {
-    checkPageBreak(30);
+    checkPageBreak(35);
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, pageWidth - margin, y);
     y += 6;
 
     doc.setFillColor(16, 120, 80);
-    doc.rect(margin, y - 1, 2, 6, "F");
+    doc.circle(margin + 3, y + 1.5, 3, "F");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("$", margin + 1.8, y + 2.8);
+
     doc.setTextColor(16, 120, 80);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text("AI BID PRICE PREDICTION", margin + 5, y + 3);
+    doc.text("AI BID PRICE PREDICTION", margin + 9, y + 3);
     y += 10;
 
     // Price boxes
@@ -167,27 +313,46 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
     const boxWidth = (contentWidth - 10) / 3;
     for (let idx = 0; idx < prices.length; idx++) {
       const x = margin + idx * (boxWidth + 5);
-      doc.setFillColor(idx === 1 ? 220 : 240, idx === 1 ? 245 : 240, idx === 1 ? 230 : 240);
-      doc.rect(x, y - 2, boxWidth, 14, "F");
+      const isRecommended = idx === 1;
+      doc.setFillColor(isRecommended ? 220 : 245, isRecommended ? 245 : 245, isRecommended ? 230 : 245);
+      if (isRecommended) {
+        doc.setDrawColor(16, 120, 80);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(x, y - 2, boxWidth, 16, 2, 2, "FD");
+        doc.setLineWidth(0.2);
+      } else {
+        doc.roundedRect(x, y - 2, boxWidth, 16, 2, 2, "F");
+      }
       doc.setFontSize(7);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(100, 100, 100);
       doc.text(prices[idx].label.toUpperCase(), x + 3, y + 3);
-      doc.setFontSize(10);
-      doc.setTextColor(idx === 1 ? 16 : 50, idx === 1 ? 120 : 50, idx === 1 ? 80 : 50);
-      doc.text(formatContractValue(prices[idx].value), x + 3, y + 10);
+      doc.setFontSize(11);
+      doc.setTextColor(isRecommended ? 16 : 50, isRecommended ? 120 : 50, isRecommended ? 80 : 50);
+      doc.text(formatContractValue(prices[idx].value), x + 3, y + 11);
     }
-    y += 18;
+    y += 20;
 
-    // Confidence
+    // Confidence + Strategy
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(100, 100, 100);
     doc.text(`Confidence: ${(opportunity.pricingPrediction.confidence || "").toUpperCase()}`, margin + 5, y);
+    if (opportunity.pricingPrediction.strategy) {
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      const stratLines = doc.splitTextToSize(`Strategy: ${opportunity.pricingPrediction.strategy}`, contentWidth - 5);
+      for (const sl of stratLines) {
+        checkPageBreak(5);
+        doc.text(sl, margin + 5, y);
+        y += 4;
+      }
+    }
     y += 6;
   }
 
-  // --- Footer ---
+  // --- Footer on all pages ---
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -196,7 +361,7 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
     doc.text(
       `ARBER Gov Bid Automation  |  Confidential  |  Page ${i} of ${pageCount}`,
       pageWidth / 2,
-      290,
+      pageHeight - 8,
       { align: "center" }
     );
   }

@@ -14,19 +14,22 @@ export default function SavedOpportunitiesPage() {
   const [savedOpps, setSavedOpps] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch saved opportunities from DB on mount
+  // Fetch saved opportunities from DB on mount and when savedIds changes
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const data = await fetchSavedOpportunities();
-        setSavedOpps(data.opportunities || []);
+        if (!cancelled) setSavedOpps(data.opportunities || []);
       } catch {
         /* ignore */
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [savedIds.size]);
 
   // When user unsaves from this page, filter them out reactively
   const visibleOpps = savedOpps.filter((opp) => savedIds.has(opp.id));

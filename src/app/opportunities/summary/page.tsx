@@ -23,17 +23,27 @@ import type { Opportunity } from "@/data/opportunities";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
 
 const API_BASE = "https://arbersaas.duckdns.org/api";
+// const API_BASE = "http://localhost:8000/api";
 
 interface AISummary {
   projectOverview: string;
   keyDeadlines: string;
-  requirementsSummary: string;
-  contactInfo: string;
-  complianceAssessment: string;
-  pricingIntelligence: string;
+  complianceGatekeepers: string;
+  scopeBreakdown: string;
+  laborRequirements: string;
+  pricingStructure: string;
+  evaluationCriteria: string;
+  risksRedFlags: string;
   incumbentCompetition: string;
   attachmentHighlights: string;
+  opportunityMapping: string;
+  actionPlan: string;
+  contactInfo: string;
   recommendation: string;
+  // Legacy
+  requirementsSummary?: string;
+  complianceAssessment?: string;
+  pricingIntelligence?: string;
 }
 
 export default function AISummaryPage() {
@@ -58,6 +68,8 @@ export default function AISummaryPage() {
       (async () => {
         try {
           const token = localStorage.getItem("arber_token");
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
           const response = await fetch(`${API_BASE}/ai-summary`, {
             method: "POST",
             headers: {
@@ -65,7 +77,9 @@ export default function AISummaryPage() {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({ opportunity: opp }),
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
 
           if (!response.ok) throw new Error(`Backend error: ${response.status}`);
           const data = await response.json();
@@ -74,7 +88,13 @@ export default function AISummaryPage() {
           setSummary(data.summary);
           setOppData(data.opportunity);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to generate summary");
+          if (err instanceof DOMException && err.name === "AbortError") {
+            setError("Request timed out. The backend may be unavailable — please try again.");
+          } else if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("NetworkError") || err.message.includes("Failed to fetch"))) {
+            setError("Cannot connect to backend server. Please ensure it is running.");
+          } else {
+            setError(err instanceof Error ? err.message : "Failed to generate summary");
+          }
         } finally {
           setLoading(false);
         }
@@ -293,63 +313,98 @@ export default function AISummaryPage() {
               </div>
             )}
 
-            {/* Two column layout - stacks on mobile */}
+            {/* Sections - two column on desktop, stacks on mobile */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-6 mb-4 sm:mb-6">
               <div>
                 {renderSection(
                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />,
-                  "Project Overview",
+                  "1. Project Overview",
                   summary.projectOverview,
                   "bg-white",
                   "bg-slate-100"
                 )}
                 {renderSection(
                   <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />,
-                  "Key Deadlines",
+                  "2. Key Deadlines",
                   summary.keyDeadlines,
                   "bg-white",
                   "bg-red-50"
                 )}
                 {renderSection(
                   <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />,
-                  "Compliance & Risk Assessment",
-                  summary.complianceAssessment,
+                  "3. Compliance Gatekeepers",
+                  summary.complianceGatekeepers || summary.complianceAssessment || "",
                   "bg-white",
                   "bg-amber-50"
                 )}
                 {renderSection(
-                  <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />,
-                  "Pricing Intelligence",
-                  summary.pricingIntelligence,
-                  "bg-white",
-                  "bg-emerald-50"
-                )}
-              </div>
-              <div>
-                {renderSection(
                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />,
-                  "Requirements Summary",
-                  summary.requirementsSummary,
+                  "4. Scope of Work Breakdown",
+                  summary.scopeBreakdown || summary.requirementsSummary || "",
                   "bg-white",
                   "bg-slate-100"
                 )}
+                {(summary.laborRequirements) && renderSection(
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />,
+                  "5. Labor & Resource Requirements",
+                  summary.laborRequirements,
+                  "bg-white",
+                  "bg-purple-50"
+                )}
+                {renderSection(
+                  <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />,
+                  "6. Pricing & Cost Structure",
+                  summary.pricingStructure || summary.pricingIntelligence || "",
+                  "bg-white",
+                  "bg-emerald-50"
+                )}
+                {(summary.evaluationCriteria) && renderSection(
+                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />,
+                  "7. Evaluation Criteria",
+                  summary.evaluationCriteria,
+                  "bg-white",
+                  "bg-blue-50"
+                )}
+              </div>
+              <div>
+                {(summary.risksRedFlags) && renderSection(
+                  <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />,
+                  "8. Risks & Red Flags",
+                  summary.risksRedFlags,
+                  "bg-white",
+                  "bg-red-50"
+                )}
                 {renderSection(
                   <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />,
-                  "Incumbent & Competition",
+                  "9. Incumbent & Competition",
                   summary.incumbentCompetition,
                   "bg-white",
                   "bg-purple-50"
                 )}
                 {renderSection(
                   <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />,
-                  "Attachment Highlights",
+                  "10. Attachment Highlights",
                   summary.attachmentHighlights,
                   "bg-white",
                   "bg-blue-50"
                 )}
+                {(summary.opportunityMapping) && renderSection(
+                  <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />,
+                  "11. Opportunity Mapping",
+                  summary.opportunityMapping,
+                  "bg-white",
+                  "bg-teal-50"
+                )}
+                {(summary.actionPlan) && renderSection(
+                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />,
+                  "12. Action Plan",
+                  summary.actionPlan,
+                  "bg-white",
+                  "bg-slate-100"
+                )}
                 {summary.contactInfo && renderSection(
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />,
-                  "Contact Information",
+                  "13. Contact Information",
                   summary.contactInfo,
                   "bg-white",
                   "bg-blue-50"

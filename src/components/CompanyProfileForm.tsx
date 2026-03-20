@@ -32,6 +32,7 @@ import {
 import { NAICS_CODES } from "@/data/opportunities";
 import AppIcon from "@/components/AppIcon";
 import { useAuth } from "@/context/AuthContext";
+import { API_BASE } from "@/lib/api";
 
 const emptyProfile = {
   contactName: "",
@@ -158,7 +159,7 @@ function TextInput({
 }
 
 export default function CompanyProfileForm() {
-  const { user, companyProfile, updateProfile: saveProfile, updateUser: saveUser } = useAuth();
+  const { user, companyProfile, updateProfile: saveProfile, updateUser: saveUser, refreshProfile } = useAuth();
   const [profile, setProfile] = useState(emptyProfile);
   const [selectedNaics, setSelectedNaics] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -167,8 +168,10 @@ export default function CompanyProfileForm() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pastPerformance, setPastPerformance] = useState<
-    { contract: string; agency: string; value: string; period: string; cpars: string; rating: number }[]
+    { id?: string; contract: string; agency: string; value: string; period: string; cpars: string; rating: number; description?: string; pocName?: string; pocEmail?: string; pocPhone?: string }[]
   >([]);
+  const [certFiles, setCertFiles] = useState<{ id: string; fileName: string; storagePath: string; createdAt: string }[]>([]);
+  const [certUploading, setCertUploading] = useState(false);
 
   // Load profile from AuthContext when available
   useEffect(() => {
@@ -209,8 +212,24 @@ export default function CompanyProfileForm() {
         employeeCount: companyProfile.employeeCount || "",
       }));
       setSelectedNaics(companyProfile.naicsCodes || []);
+      if (companyProfile.pastPerformance && companyProfile.pastPerformance.length > 0) {
+        setPastPerformance(companyProfile.pastPerformance);
+      }
     }
   }, [user, companyProfile]);
+
+  // Load certification files
+  useEffect(() => {
+    const token = localStorage.getItem("arber_token");
+    if (!token) return;
+    const CERT_API = API_BASE;
+    fetch(`${CERT_API}/certifications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setCertFiles(data || []))
+      .catch(() => {});
+  }, [saved]); // re-fetch after save
 
   const handleSave = async () => {
     setSaving(true);
@@ -253,6 +272,25 @@ export default function CompanyProfileForm() {
         jobTitle: profile.jobTitle,
         phone: profile.phone,
       });
+
+      // Save past performance references
+      const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+      const PP_API = API_BASE;
+      const ppResp = await fetch(`${PP_API}/past-performance`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ references: pastPerformance }),
+      });
+      if (!ppResp.ok) {
+        const errData = await ppResp.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save past performance references");
+      }
+
+      // Refresh profile to get updated data including past performance
+      await refreshProfile();
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -860,7 +898,7 @@ export default function CompanyProfileForm() {
               </div>
               <button
                 type="button"
-                onClick={() => setPastPerformance((prev) => [...prev, { contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3 }])}
+                onClick={() => setPastPerformance((prev) => [...prev, { contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3, description: "", pocName: "", pocEmail: "", pocPhone: "" }])}
                 className="flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -872,7 +910,7 @@ export default function CompanyProfileForm() {
                 <p className="text-sm text-slate-400">No past performance references added yet.</p>
                 <button
                   type="button"
-                  onClick={() => setPastPerformance([{ contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3 }])}
+                  onClick={() => setPastPerformance([{ contract: "", agency: "", value: "", period: "", cpars: "Satisfactory", rating: 3, description: "", pocName: "", pocEmail: "", pocPhone: "" }])}
                   className="mt-2 text-xs font-semibold text-sky-700 hover:text-sky-800 cursor-pointer"
                 >
                   + Add your first reference
@@ -954,12 +992,141 @@ export default function CompanyProfileForm() {
                           }`}>{ref.cpars}</span>
                         </div>
                       </div>
+                      <div className="sm:col-span-2">
+                        <FieldLabel label="Description of Work" />
+                        <textarea
+                          value={ref.description || ""}
+                          onChange={(e) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, description: e.target.value } : r))}
+                          rows={3}
+                          placeholder="Describe the scope, deliverables, and relevance to federal contracting..."
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white resize-none placeholder:text-slate-300"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 mt-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Point of Contact (Reference)</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <FieldLabel label="POC Name" />
+                            <TextInput
+                              value={ref.pocName || ""}
+                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocName: v } : r))}
+                              icon={UserRound}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel label="POC Email" />
+                            <TextInput
+                              value={ref.pocEmail || ""}
+                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocEmail: v } : r))}
+                              icon={Mail}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel label="POC Phone" />
+                            <TextInput
+                              value={ref.pocPhone || ""}
+                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocPhone: v } : r))}
+                              icon={Phone}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+        </div>
+      </SectionShell>
+
+      {/* Certification Documents Upload */}
+      <SectionShell
+        icon={Shield}
+        title="Certification Documents"
+        description="Upload certification PDFs (8(a), HUBZone, SDVOSB, etc.). These will be auto-merged as appendices in your draft proposals."
+      >
+        <div className="space-y-4">
+          {/* Upload button */}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition-colors cursor-pointer">
+              <Plus className="w-4 h-4" />
+              {certUploading ? "Uploading..." : "Upload PDF"}
+              <input
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                disabled={certUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setCertUploading(true);
+                  try {
+                    const token = localStorage.getItem("arber_token");
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    const resp = await fetch(`${API_BASE}/certifications/upload`, {
+                      method: "POST",
+                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                      body: formData,
+                    });
+                    const result = await resp.json();
+                    if (result.success) {
+                      // Refresh list
+                      const listResp = await fetch(`${API_BASE}/certifications`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (listResp.ok) setCertFiles(await listResp.json());
+                    } else {
+                      setSaveError(result.error || "Upload failed");
+                    }
+                  } catch {
+                    setSaveError("Failed to upload certification file");
+                  } finally {
+                    setCertUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </label>
+            <p className="text-xs text-slate-400">PDF files only. These get appended to your proposal drafts automatically.</p>
+          </div>
+
+          {/* File list */}
+          {certFiles.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center">
+              <Shield className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">No certification documents uploaded yet.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+              {certFiles.map((cert) => (
+                <div key={cert.id} className="flex items-center justify-between px-5 py-3">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-4 h-4 text-red-400" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{cert.fileName}</p>
+                      <p className="text-[11px] text-slate-400">{cert.createdAt ? new Date(cert.createdAt).toLocaleDateString() : ""}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const token = localStorage.getItem("arber_token");
+                      await fetch(`${API_BASE}/certifications/${cert.id}`, {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      setCertFiles((prev) => prev.filter((c) => c.id !== cert.id));
+                    }}
+                    className="p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </SectionShell>
     </div>

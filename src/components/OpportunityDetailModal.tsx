@@ -20,10 +20,12 @@ import {
   AlertTriangle,
   UserCheck,
   Loader2,
+  PenTool,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
+import { generateDraft } from "@/lib/api";
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -45,6 +47,7 @@ export default function OpportunityDetailModal({
 }: OpportunityDetailModalProps) {
   const isGo = opportunity.status === "Go";
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
   const bidType = opportunity.bidType;
   const bidTypeStyle = bidType ? BID_TYPE_COLORS[bidType] || BID_TYPE_COLORS["RFP"] : null;
 
@@ -412,7 +415,7 @@ export default function OpportunityDetailModal({
         </div>
 
         {/* Footer actions */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex items-center gap-2 sm:gap-3 flex-shrink-0 bg-gray-50">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex items-center gap-2 sm:gap-3 flex-shrink-0 bg-gray-50 flex-wrap">
           <button
             onClick={() => {
               localStorage.setItem("arber_summary_opportunity", JSON.stringify(opportunity));
@@ -428,6 +431,36 @@ export default function OpportunityDetailModal({
             <span className="hidden sm:inline">{generatingPdf ? "Generating PDF..." : "Generate AI Summary Report"}</span>
             <span className="sm:hidden">{generatingPdf ? "Generating..." : "AI Summary"}</span>
           </button>
+          {isGo && (
+            <button
+              onClick={async () => {
+                setGeneratingDraft(true);
+                try {
+                  const result = await generateDraft(opportunity);
+                  if (result.success && result.draft) {
+                    localStorage.setItem("arber_draft_data", JSON.stringify(result));
+                    window.open("/opportunities/draft", "_blank");
+                  } else {
+                    alert(result.error || "Failed to generate draft. Please try again.");
+                  }
+                } catch {
+                  alert("Failed to generate draft. Please try again.");
+                } finally {
+                  setGeneratingDraft(false);
+                }
+              }}
+              disabled={generatingDraft}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors"
+            >
+              {generatingDraft ? (
+                <Loader2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 animate-spin" />
+              ) : (
+                <PenTool className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+              )}
+              <span className="hidden sm:inline">{generatingDraft ? "Generating Draft..." : "Generate Draft"}</span>
+              <span className="sm:hidden">{generatingDraft ? "Drafting..." : "Draft"}</span>
+            </button>
+          )}
           <button
             onClick={async () => {
               const withUrl = opportunity.attachments.filter((a) => a.url);

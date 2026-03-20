@@ -6,7 +6,8 @@
 
 import type { Opportunity } from "@/data/opportunities";
 
-const API_BASE = "https://arbersaas.duckdns.org/api";
+export const API_BASE = "https://arbersaas.duckdns.org/api";
+// export const API_BASE = "http://localhost:8000/api";
 
 function getAuthHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
@@ -201,6 +202,170 @@ export async function fetchSavedOpportunities(): Promise<{ opportunities: Opport
   if (!resp.ok) return { opportunities: [] };
   return resp.json();
 }
+
+// ============================================================================
+// RFQ Draft Generation
+// ============================================================================
+
+export interface DraftResult {
+  success: boolean;
+  draft?: {
+    coverPage: string;
+    coverLetter: string;
+    companyProfile: string;
+    complianceMatrix: string;
+    technicalCapability: string;
+    managementPlan: string;
+    qualityControlPlan: string;
+    pastPerformance: string;
+    clinData: string;
+    repsAndCerts: string;
+    draftTitle: string;
+    rawText?: string;
+    // Legacy fields for backward compatibility
+    clinPricing?: string;
+    technicalResponse?: string;
+  };
+  opportunity?: {
+    title: string;
+    agency: string;
+    noticeId: string;
+    naicsCode: string;
+    dueDate: string;
+    bidType: string;
+  };
+  company?: {
+    name: string;
+    uei: string;
+    cageCode: string;
+    address?: string;
+    samStatus?: string;
+    businessType?: string;
+    naicsCode?: string;
+    website?: string;
+    phone?: string;
+    email?: string;
+    annualRevenue?: string;
+    employeeCount?: string;
+    certifications?: string[];
+  };
+  error?: string;
+}
+
+/** Generate an RFQ proposal draft via GPT-4o */
+export async function generateDraft(opportunity: Opportunity): Promise<DraftResult> {
+  const resp = await fetch(`${API_BASE}/generate-draft`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ opportunity }),
+  });
+  if (!resp.ok) {
+    return { success: false, error: `Request failed: ${resp.status}` };
+  }
+  return resp.json();
+}
+
+// ============================================================================
+// DRAFT WORKSPACE
+// ============================================================================
+
+export interface SavedDraft {
+  id: string;
+  title: string;
+  agency: string;
+  notice_id: string;
+  due_date: string | null;
+  status: string;
+  overall_progress: number;
+  last_modified: string;
+  created_at: string;
+  version: number;
+}
+
+export interface PageLimit {
+  volume: string;
+  maxPages: number | null;
+  source: string;
+  isDefault?: boolean;
+}
+
+export interface FormattingReq {
+  requirement: string;
+  source: string;
+}
+
+/** Save or update a draft */
+export async function saveDraft(payload: {
+  draftId?: string | null;
+  sectionsJson: Record<string, string>;
+  opportunityJson: Record<string, unknown>;
+  companyJson: Record<string, unknown>;
+  title?: string;
+  pageLimits?: PageLimit[];
+  formattingRequirements?: FormattingReq[];
+  createNewVersion?: boolean;
+}): Promise<{ success: boolean; draftId?: string; version?: number; savedAt?: string; error?: string }> {
+  const resp = await fetch(`${API_BASE}/drafts/save`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
+/** List all drafts for current user */
+export async function listDrafts(): Promise<{ success: boolean; drafts: SavedDraft[] }> {
+  const resp = await fetch(`${API_BASE}/drafts`, { headers: getAuthHeaders() });
+  return resp.json();
+}
+
+/** Load a single draft by ID */
+export async function loadDraft(draftId: string): Promise<DraftResult & { draftId?: string; pageLimits?: PageLimit[]; formattingRequirements?: FormattingReq[]; lastModified?: string }> {
+  const resp = await fetch(`${API_BASE}/drafts/${draftId}`, { headers: getAuthHeaders() });
+  return resp.json();
+}
+
+/** Delete a draft */
+export async function deleteDraft(draftId: string): Promise<{ success: boolean; error?: string }> {
+  const resp = await fetch(`${API_BASE}/drafts/${draftId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return resp.json();
+}
+
+/** AI rewrite a specific section */
+export async function rewriteSection(payload: {
+  sectionKey: string;
+  sectionContent: string;
+  instruction: string;
+  conversationHistory?: { role: string; content: string }[];
+  opportunityContext?: Record<string, unknown>;
+  pageLimit?: number | null;
+}): Promise<{ success: boolean; rewrittenContent?: string; assistantMessage?: string; error?: string }> {
+  const resp = await fetch(`${API_BASE}/draft/rewrite-section`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
+/** Extract page limits from solicitation */
+export async function extractPageLimits(payload: {
+  description: string;
+  bidType: string;
+  naicsCode?: string;
+}): Promise<{ success: boolean; pageLimits: PageLimit[]; formattingRequirements: FormattingReq[]; hasExplicitLimits: boolean }> {
+  const resp = await fetch(`${API_BASE}/draft/extract-page-limits`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
+// ============================================================================
 
 /** Load fetch pagination state (auth token identifies user) */
 export async function loadFetchState(

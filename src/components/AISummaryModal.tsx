@@ -18,6 +18,11 @@ import {
   Phone,
   Mail,
   User,
+  Briefcase,
+  Target,
+  ListChecks,
+  ClipboardList,
+  Compass,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
@@ -25,13 +30,22 @@ import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
 interface AISummary {
   projectOverview: string;
   keyDeadlines: string;
-  requirementsSummary: string;
-  contactInfo: string;
-  complianceAssessment: string;
-  pricingIntelligence: string;
+  complianceGatekeepers: string;
+  scopeBreakdown: string;
+  laborRequirements: string;
+  pricingStructure: string;
+  evaluationCriteria: string;
+  risksRedFlags: string;
   incumbentCompetition: string;
   attachmentHighlights: string;
+  opportunityMapping: string;
+  actionPlan: string;
+  contactInfo: string;
   recommendation: string;
+  // Legacy
+  requirementsSummary?: string;
+  complianceAssessment?: string;
+  pricingIntelligence?: string;
 }
 
 interface AISummaryModalProps {
@@ -40,6 +54,7 @@ interface AISummaryModalProps {
 }
 
 const API_BASE = "https://arbersaas.duckdns.org/api";
+// const API_BASE = "http://localhost:8000/api";
 
 export default function AISummaryModal({ opportunity, onClose }: AISummaryModalProps) {
   const [summary, setSummary] = useState<AISummary | null>(null);
@@ -53,6 +68,8 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
     (async () => {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
         const response = await fetch(`${API_BASE}/ai-summary`, {
           method: "POST",
           headers: {
@@ -60,7 +77,9 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ opportunity }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) throw new Error(`Backend error: ${response.status}`);
         const data = await response.json();
@@ -69,7 +88,13 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
         setSummary(data.summary);
         setOppData(data.opportunity);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to generate summary");
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setError("Request timed out. The backend may be unavailable.");
+        } else if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
+          setError("Cannot connect to backend server. Please ensure it is running.");
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to generate summary");
+        }
       } finally {
         setLoading(false);
       }
@@ -230,45 +255,71 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
                 summary.keyDeadlines,
                 "bg-red-50"
               )}
-              {renderSection(
-                <FileText className="w-3.5 h-3.5 text-slate-600" />,
-                "Requirements Summary",
-                summary.requirementsSummary,
-                "bg-slate-100"
-              )}
-              {renderSection(
+              {(summary.complianceGatekeepers || summary.complianceAssessment) && renderSection(
                 <Shield className="w-3.5 h-3.5 text-amber-600" />,
-                "Compliance & Risk Assessment",
-                summary.complianceAssessment,
+                "Compliance Gatekeepers",
+                summary.complianceGatekeepers || summary.complianceAssessment || "",
                 "bg-amber-50"
               )}
-              {renderSection(
+              {(summary.scopeBreakdown || summary.requirementsSummary) && renderSection(
+                <ClipboardList className="w-3.5 h-3.5 text-slate-600" />,
+                "Scope of Work Breakdown",
+                summary.scopeBreakdown || summary.requirementsSummary || "",
+                "bg-slate-100"
+              )}
+              {summary.laborRequirements && renderSection(
+                <Briefcase className="w-3.5 h-3.5 text-purple-600" />,
+                "Labor & Resource Requirements",
+                summary.laborRequirements,
+                "bg-purple-50"
+              )}
+              {(summary.pricingStructure || summary.pricingIntelligence) && renderSection(
                 <DollarSign className="w-3.5 h-3.5 text-emerald-600" />,
-                "Pricing Intelligence",
-                summary.pricingIntelligence,
+                "Pricing & Cost Structure",
+                summary.pricingStructure || summary.pricingIntelligence || "",
                 "bg-emerald-50"
               )}
-              {renderSection(
+              {summary.evaluationCriteria && renderSection(
+                <ListChecks className="w-3.5 h-3.5 text-blue-600" />,
+                "Evaluation Criteria",
+                summary.evaluationCriteria,
+                "bg-blue-50"
+              )}
+              {summary.risksRedFlags && renderSection(
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />,
+                "Risks & Red Flags",
+                summary.risksRedFlags,
+                "bg-red-50"
+              )}
+              {summary.incumbentCompetition && renderSection(
                 <Users className="w-3.5 h-3.5 text-purple-600" />,
                 "Incumbent & Competition",
                 summary.incumbentCompetition,
                 "bg-purple-50"
               )}
-              {renderSection(
+              {summary.attachmentHighlights && renderSection(
                 <Paperclip className="w-3.5 h-3.5 text-blue-600" />,
                 "Attachment Highlights",
                 summary.attachmentHighlights,
                 "bg-blue-50"
               )}
-
-              {/* Contact info from AI */}
-              {summary.contactInfo && (
-                renderSection(
-                  <Phone className="w-3.5 h-3.5 text-blue-600" />,
-                  "Contact Information",
-                  summary.contactInfo,
-                  "bg-blue-50"
-                )
+              {summary.opportunityMapping && renderSection(
+                <Compass className="w-3.5 h-3.5 text-teal-600" />,
+                "Opportunity Mapping",
+                summary.opportunityMapping,
+                "bg-teal-50"
+              )}
+              {summary.actionPlan && renderSection(
+                <Target className="w-3.5 h-3.5 text-slate-700" />,
+                "Action Plan",
+                summary.actionPlan,
+                "bg-slate-100"
+              )}
+              {summary.contactInfo && renderSection(
+                <Phone className="w-3.5 h-3.5 text-blue-600" />,
+                "Contact Information",
+                summary.contactInfo,
+                "bg-blue-50"
               )}
 
               {/* Recommendation - highlighted */}

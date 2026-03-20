@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
 const API_BASE = "https://arbersaas.duckdns.org/api";
+// const API_BASE = "http://localhost:8000/api";
 
 export interface AuthUser {
   id: string;
@@ -38,6 +39,7 @@ export interface CompanyProfile {
   annualRevenue: string;
   employeeCount: string;
   naicsCodes: string[];
+  pastPerformance?: { id?: string; contract: string; agency: string; value: string; period: string; cpars: string; rating: number; description?: string; pocName?: string; pocEmail?: string; pocPhone?: string }[];
 }
 
 interface AuthContextType {
