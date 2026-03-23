@@ -1096,24 +1096,21 @@ export default function DraftViewerPage() {
                     });
                   }
 
-                  // Block 30b: Name and Title of Signer
-                  const block30bX = 36;
-                  const block30bY = 52;
-                  firstPage.drawText(sfManagerName, {
-                    x: block30bX, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
-                  });
-                  firstPage.drawText(sfJobTitle, {
-                    x: block30bX + 180, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
+                  // Block 30b: Name and Title of Signer (inside the box, above "AUTHORIZED" line)
+                  const block30bX = 22;
+                  const block30bY = 38;
+                  firstPage.drawText(`${sfManagerName}, ${sfJobTitle}`, {
+                    x: block30bX, y: block30bY, size: 9, color: sfRgb(0, 0, 0),
                   });
 
-                  // Block 30c: Date Signed
+                  // Block 30c: Date Signed (inside date box, aligned with 30b)
                   const dateStr = new Date().toLocaleDateString("en-US");
                   firstPage.drawText(dateStr, {
-                    x: pgWidth - 150, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
+                    x: 400, y: block30bY, size: 9, color: sfRgb(0, 0, 0),
                   });
                 }
 
-                // Block 30a: Draw signature image if available
+                // Block 30a: Draw signature image if available (inside signature box)
                 if (sf1449Data.signatureBase64) {
                   try {
                     const sigBytes = Uint8Array.from(atob(sf1449Data.signatureBase64), c => c.charCodeAt(0));
@@ -1124,15 +1121,15 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Scale signature to fit Block 30a area (~150x40 pts)
-                    const sigMaxW = 150;
-                    const sigMaxH = 40;
+                    // Scale signature to fit Block 30a area (~200x35 pts)
+                    const sigMaxW = 200;
+                    const sigMaxH = 35;
                     const sigScale = Math.min(sigMaxW / sigImage.width, sigMaxH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
                     firstPage.drawImage(sigImage, {
-                      x: 36,
-                      y: 62, // Just above name line
+                      x: 22,
+                      y: 58, // Inside Block 30a signature box
                       width: sigW,
                       height: sigH,
                     });
