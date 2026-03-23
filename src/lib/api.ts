@@ -6,8 +6,8 @@
 
 import type { Opportunity } from "@/data/opportunities";
 
-// export const API_BASE = "https://arbersaas.duckdns.org/api";
-export const API_BASE = "http://localhost:8000/api";
+export const API_BASE = "https://arbersaas.duckdns.org/api";
+// export const API_BASE = "http://localhost:8000/api";
 
 function getAuthHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;

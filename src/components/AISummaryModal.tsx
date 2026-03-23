@@ -53,8 +53,8 @@ interface AISummaryModalProps {
   onClose: () => void;
 }
 
-// const API_BASE = "https://arbersaas.duckdns.org/api";
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "https://arbersaas.duckdns.org/api";
+// const API_BASE = "http://localhost:8000/api";
 
 export default function AISummaryModal({ opportunity, onClose }: AISummaryModalProps) {
   const [summary, setSummary] = useState<AISummary | null>(null);
