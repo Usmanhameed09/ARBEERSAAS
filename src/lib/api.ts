@@ -248,6 +248,8 @@ export interface DraftResult {
     annualRevenue?: string;
     employeeCount?: string;
     certifications?: string[];
+    managerName?: string;
+    jobTitle?: string;
   };
   attachmentAnalysis?: {
     sf1449Found: boolean;

@@ -28,6 +28,8 @@ import {
   Check,
   Plus,
   Trash2,
+  PenTool,
+  Upload,
 } from "lucide-react";
 import { NAICS_CODES } from "@/data/opportunities";
 import AppIcon from "@/components/AppIcon";
@@ -172,6 +174,8 @@ export default function CompanyProfileForm() {
   >([]);
   const [certFiles, setCertFiles] = useState<{ id: string; fileName: string; storagePath: string; createdAt: string }[]>([]);
   const [certUploading, setCertUploading] = useState(false);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [sigUploading, setSigUploading] = useState(false);
 
   // Load profile from AuthContext when available
   useEffect(() => {
@@ -228,6 +232,13 @@ export default function CompanyProfileForm() {
     })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => setCertFiles(data || []))
+      .catch(() => {});
+    // Load signature
+    fetch(`${API_BASE}/profile/signature`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.hasSignature) setSignatureUrl(data.dataUrl); })
       .catch(() => {});
   }, [saved]); // re-fetch after save
 
@@ -486,6 +497,73 @@ export default function CompanyProfileForm() {
               />
             </div>
           </div>
+        </div>
+      </SectionShell>
+
+      {/* Signature Upload */}
+      <SectionShell
+        icon={PenTool}
+        title="Signature"
+        description="Upload your signature image (PNG/JPG). This will be placed on SF1449 forms in your proposals."
+      >
+        <div className="flex items-center gap-6">
+          {signatureUrl ? (
+            <div className="relative border border-slate-200 rounded-xl p-3 bg-white">
+              <img src={signatureUrl} alt="Signature" className="h-16 max-w-[200px] object-contain" />
+              <button
+                onClick={() => setSignatureUrl(null)}
+                className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs hover:bg-rose-600"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-slate-200 rounded-xl px-8 py-6 text-center">
+              <PenTool className="w-6 h-6 text-slate-300 mx-auto mb-1" />
+              <p className="text-xs text-slate-400">No signature uploaded</p>
+            </div>
+          )}
+          <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition-colors cursor-pointer">
+            <Upload className="w-4 h-4" />
+            {sigUploading ? "Uploading..." : "Upload Signature"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              disabled={sigUploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setSigUploading(true);
+                try {
+                  const token = localStorage.getItem("arber_token");
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  const resp = await fetch(`${API_BASE}/profile/upload-signature`, {
+                    method: "POST",
+                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    body: formData,
+                  });
+                  const result = await resp.json();
+                  if (result.success) {
+                    // Reload signature
+                    const sigResp = await fetch(`${API_BASE}/profile/signature`, {
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    const sigData = await sigResp.json();
+                    if (sigData?.hasSignature) setSignatureUrl(sigData.dataUrl);
+                  } else {
+                    setSaveError(result.error || "Signature upload failed");
+                  }
+                } catch {
+                  setSaveError("Failed to upload signature");
+                } finally {
+                  setSigUploading(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </label>
         </div>
       </SectionShell>
 

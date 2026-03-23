@@ -579,7 +579,7 @@ export default function DraftViewerPage() {
       const margin = 25;
       const maxWidth = pageWidth - margin * 2;
       const opp = data.opportunity || { title: "", agency: "", noticeId: "", naicsCode: "", dueDate: "", bidType: "" };
-      const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [] };
+      const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [], managerName: "", jobTitle: "" };
       const solNum = opp.noticeId || "";
 
       // Helper: add header to each page
@@ -1060,42 +1060,86 @@ export default function DraftViewerPage() {
               }
 
               const sf1449Pdf = await PDFDocument.load(sf1449Bytes.buffer);
-              const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, sf1449Pdf.getPageIndices());
+              // Only copy the first page of SF1449 (limit to 1 page)
+              const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, [0]);
 
-              // Insert SF1449 pages at the beginning (before cover page)
-              for (let i = sf1449Pages.length - 1; i >= 0; i--) {
-                mainPdfDoc.insertPage(0, sf1449Pages[i]);
-              }
+              // Insert SF1449 as the very first page
+              mainPdfDoc.insertPage(0, sf1449Pages[0]);
 
-              // If not auto-filled by backend, overlay company info via pdf-lib
-              if (!sf1449Data.filled) {
+              // Overlay company info via pdf-lib (always overlay — even if backend tried AcroForm fill)
+              {
                 const { rgb: sfRgb } = await import("pdf-lib");
                 const firstPage = mainPdfDoc.getPage(0);
+                const pgWidth = firstPage.getWidth();
                 const pgHeight = firstPage.getHeight();
 
-                // Block 30b: Name and Title of Signer (bottom-left area)
-                const signerName = comp.name || "";
-                firstPage.drawText(signerName, {
-                  x: 72,
-                  y: 85,
-                  size: 9,
-                  color: sfRgb(0, 0, 0),
-                });
-                firstPage.drawText("Manager", {
-                  x: 72 + 200,
-                  y: 85,
-                  size: 9,
-                  color: sfRgb(0, 0, 0),
-                });
+                // Use manager name from SF1449 response or company data
+                const sfManagerName = sf1449Data.managerName || comp.managerName || comp.name || "";
+                const sfJobTitle = sf1449Data.jobTitle || comp.jobTitle || "Manager";
 
-                // Block 30c: Date Signed
-                const dateStr = new Date().toLocaleDateString("en-US");
-                firstPage.drawText(dateStr, {
-                  x: 400,
-                  y: 85,
-                  size: 9,
-                  color: sfRgb(0, 0, 0),
-                });
+                if (!sf1449Data.filled) {
+                  // SF1449 standard form field positions (US Letter 612x792)
+                  // Block 17a: Contractor/Offeror name, address, phone
+                  const block17aX = 36;
+                  const block17aY = pgHeight - 262;
+                  firstPage.drawText(comp.name || "", {
+                    x: block17aX, y: block17aY, size: 8, color: sfRgb(0, 0, 0),
+                  });
+                  if (comp.address) {
+                    firstPage.drawText(comp.address, {
+                      x: block17aX, y: block17aY - 11, size: 7, color: sfRgb(0, 0, 0),
+                    });
+                  }
+                  if (comp.phone) {
+                    firstPage.drawText(`Tel: ${comp.phone}`, {
+                      x: block17aX, y: block17aY - 22, size: 7, color: sfRgb(0, 0, 0),
+                    });
+                  }
+
+                  // Block 30b: Name and Title of Signer
+                  const block30bX = 36;
+                  const block30bY = 52;
+                  firstPage.drawText(sfManagerName, {
+                    x: block30bX, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
+                  });
+                  firstPage.drawText(sfJobTitle, {
+                    x: block30bX + 180, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
+                  });
+
+                  // Block 30c: Date Signed
+                  const dateStr = new Date().toLocaleDateString("en-US");
+                  firstPage.drawText(dateStr, {
+                    x: pgWidth - 150, y: block30bY, size: 8, color: sfRgb(0, 0, 0),
+                  });
+                }
+
+                // Block 30a: Draw signature image if available
+                if (sf1449Data.signatureBase64) {
+                  try {
+                    const sigBytes = Uint8Array.from(atob(sf1449Data.signatureBase64), c => c.charCodeAt(0));
+                    let sigImage;
+                    // Try PNG first, then JPG
+                    try {
+                      sigImage = await mainPdfDoc.embedPng(sigBytes);
+                    } catch {
+                      sigImage = await mainPdfDoc.embedJpg(sigBytes);
+                    }
+                    // Scale signature to fit Block 30a area (~150x40 pts)
+                    const sigMaxW = 150;
+                    const sigMaxH = 40;
+                    const sigScale = Math.min(sigMaxW / sigImage.width, sigMaxH / sigImage.height);
+                    const sigW = sigImage.width * sigScale;
+                    const sigH = sigImage.height * sigScale;
+                    firstPage.drawImage(sigImage, {
+                      x: 36,
+                      y: 62, // Just above name line
+                      width: sigW,
+                      height: sigH,
+                    });
+                  } catch (sigErr) {
+                    console.warn("Could not embed signature image:", sigErr);
+                  }
+                }
               }
             }
           }
@@ -1167,7 +1211,7 @@ export default function DraftViewerPage() {
   }
 
   const opp = data.opportunity || { title: "", agency: "", noticeId: "", naicsCode: "", dueDate: "", bidType: "" };
-  const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [] };
+  const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [], managerName: "", jobTitle: "" };
 
   // For RFQ: hide technical sections (technicalCapability, managementPlan, qualityControlPlan, pastPerformance)
   const currentBidType = (data?.opportunity?.bidType || "RFQ").toUpperCase();
