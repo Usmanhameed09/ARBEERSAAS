@@ -249,6 +249,14 @@ export interface DraftResult {
     employeeCount?: string;
     certifications?: string[];
   };
+  attachmentAnalysis?: {
+    sf1449Found: boolean;
+    sf1449Source?: string;
+    sf1449Pages?: number[];
+    sf1449SourceUrl?: string;
+    pricingFormatFound: boolean;
+    pricingFormatSource?: string;
+  };
   error?: string;
 }
 

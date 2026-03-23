@@ -1030,9 +1030,79 @@ export default function DraftViewerPage() {
       doc.text(`${appendixTitle} ${appDots}`, margin, tocY);
       doc.text("Appended", pageWidth - margin, tocY, { align: "right" });
 
-      // ─── MERGE WITH DFARS PDF ──────────────────────────────────
+      // ─── MERGE SF1449 + DFARS ──────────────────────────────────
       const mainPdfBytes = doc.output("arraybuffer");
       const mainPdfDoc = await PDFDocument.load(mainPdfBytes);
+
+      // ─── SF1449: Fetch, fill, and prepend as first page(s) ───
+      const analysisData = data.attachmentAnalysis;
+
+      if (analysisData?.sf1449Found && analysisData.sf1449SourceUrl) {
+        try {
+          const token = localStorage.getItem("arber_token");
+          const sf1449Resp = await fetch(`${API_BASE}/draft/extract-sf1449`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              sourceUrl: analysisData.sf1449SourceUrl,
+              pageIndices: analysisData.sf1449Pages || [0],
+              company: data.company || {},
+            }),
+          });
+          if (sf1449Resp.ok) {
+            const sf1449Data = await sf1449Resp.json();
+            if (sf1449Data.success && sf1449Data.pdfBase64) {
+              // Decode base64 to bytes
+              const binaryStr = atob(sf1449Data.pdfBase64);
+              const sf1449Bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) {
+                sf1449Bytes[i] = binaryStr.charCodeAt(i);
+              }
+
+              const sf1449Pdf = await PDFDocument.load(sf1449Bytes.buffer);
+              const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, sf1449Pdf.getPageIndices());
+
+              // Insert SF1449 pages at the beginning (before cover page)
+              for (let i = sf1449Pages.length - 1; i >= 0; i--) {
+                mainPdfDoc.insertPage(0, sf1449Pages[i]);
+              }
+
+              // If not auto-filled by backend, overlay company info via pdf-lib
+              if (!sf1449Data.filled) {
+                const { rgb: sfRgb } = await import("pdf-lib");
+                const firstPage = mainPdfDoc.getPage(0);
+                const pgHeight = firstPage.getHeight();
+
+                // Block 30b: Name and Title of Signer (bottom-left area)
+                const signerName = comp.name || "";
+                firstPage.drawText(signerName, {
+                  x: 72,
+                  y: 85,
+                  size: 9,
+                  color: sfRgb(0, 0, 0),
+                });
+                firstPage.drawText("Manager", {
+                  x: 72 + 200,
+                  y: 85,
+                  size: 9,
+                  color: sfRgb(0, 0, 0),
+                });
+
+                // Block 30c: Date Signed
+                const dateStr = new Date().toLocaleDateString("en-US");
+                firstPage.drawText(dateStr, {
+                  x: 400,
+                  y: 85,
+                  size: 9,
+                  color: sfRgb(0, 0, 0),
+                });
+              }
+            }
+          }
+        } catch (sfErr) {
+          console.warn("Could not merge SF1449:", sfErr);
+        }
+      }
 
       // Add a separator page before DFARS
       const { rgb } = await import("pdf-lib");
