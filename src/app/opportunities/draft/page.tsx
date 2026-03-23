@@ -1127,9 +1127,9 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    const sigAreaH = fp["30a_height"] ?? 35;
-                    const sigMaxW = 200;
-                    const sigMaxH = Math.min(sigAreaH, 40);
+                    const sigAreaH = fp["30a_height"] ?? 40;
+                    const sigMaxW = 260;
+                    const sigMaxH = Math.min(sigAreaH, 50);
                     const sigScale = Math.min(sigMaxW / sigImage.width, sigMaxH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
