@@ -1128,8 +1128,8 @@ export default function DraftViewerPage() {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
                     // Fixed generous size — ignore area height constraint
-                    const targetW = 300;
-                    const targetH = 55;
+                    const targetW = 220;
+                    const targetH = 42;
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
