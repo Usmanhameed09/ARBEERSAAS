@@ -1066,70 +1066,78 @@ export default function DraftViewerPage() {
               // Insert SF1449 as the very first page
               mainPdfDoc.insertPage(0, sf1449Pages[0]);
 
-              // Overlay company info via pdf-lib (always overlay — even if backend tried AcroForm fill)
+              // Overlay company info via pdf-lib using detected field positions
               {
                 const { rgb: sfRgb } = await import("pdf-lib");
                 const firstPage = mainPdfDoc.getPage(0);
                 const pgWidth = firstPage.getWidth();
                 const pgHeight = firstPage.getHeight();
 
-                // Use manager name from SF1449 response or company data
+                // Use backend-detected field positions or sensible fallbacks
+                const fp = sf1449Data.fieldPositions || {};
                 const sfManagerName = sf1449Data.managerName || comp.managerName || comp.name || "";
                 const sfJobTitle = sf1449Data.jobTitle || comp.jobTitle || "Manager";
+                const dateStr = new Date().toLocaleDateString("en-US");
 
                 if (!sf1449Data.filled) {
-                  // SF1449 standard form field positions (US Letter 612x792)
                   // Block 17a: Contractor/Offeror name, address, phone
-                  const block17aX = 36;
-                  const block17aY = pgHeight - 262;
+                  const b17x = fp["17a_fill_x"] ?? 36;
+                  const b17y = fp["17a_fill_y"] ?? (pgHeight - 262);
                   firstPage.drawText(comp.name || "", {
-                    x: block17aX, y: block17aY, size: 8, color: sfRgb(0, 0, 0),
+                    x: b17x, y: b17y, size: 8, color: sfRgb(0, 0, 0),
                   });
                   if (comp.address) {
                     firstPage.drawText(comp.address, {
-                      x: block17aX, y: block17aY - 11, size: 7, color: sfRgb(0, 0, 0),
+                      x: b17x, y: b17y - 11, size: 7, color: sfRgb(0, 0, 0),
                     });
                   }
                   if (comp.phone) {
                     firstPage.drawText(`Tel: ${comp.phone}`, {
-                      x: block17aX, y: block17aY - 22, size: 7, color: sfRgb(0, 0, 0),
+                      x: b17x, y: b17y - 22, size: 7, color: sfRgb(0, 0, 0),
+                    });
+                  }
+                  if (comp.email) {
+                    firstPage.drawText(comp.email, {
+                      x: b17x, y: b17y - 33, size: 7, color: sfRgb(0, 0, 0),
                     });
                   }
 
-                  // Block 30b: Name and Title of Signer (inside the box, above "AUTHORIZED" line)
-                  const block30bX = 22;
-                  const block30bY = 38;
+                  // Block 30b: Name and Title of Signer
+                  const b30bx = fp["30b_fill_x"] ?? 25;
+                  const b30by = fp["30b_fill_y"] ?? 50;
                   firstPage.drawText(`${sfManagerName}, ${sfJobTitle}`, {
-                    x: block30bX, y: block30bY, size: 9, color: sfRgb(0, 0, 0),
+                    x: b30bx, y: b30by, size: 9, color: sfRgb(0, 0, 0),
                   });
 
-                  // Block 30c: Date Signed (inside date box, aligned with 30b)
-                  const dateStr = new Date().toLocaleDateString("en-US");
+                  // Block 30c: Date Signed
+                  const b30cx = fp["30c_fill_x"] ?? 420;
+                  const b30cy = fp["30c_fill_y"] ?? b30by;
                   firstPage.drawText(dateStr, {
-                    x: 400, y: block30bY, size: 9, color: sfRgb(0, 0, 0),
+                    x: b30cx, y: b30cy, size: 9, color: sfRgb(0, 0, 0),
                   });
                 }
 
-                // Block 30a: Draw signature image if available (inside signature box)
+                // Block 30a: Draw signature image
                 if (sf1449Data.signatureBase64) {
                   try {
                     const sigBytes = Uint8Array.from(atob(sf1449Data.signatureBase64), c => c.charCodeAt(0));
                     let sigImage;
-                    // Try PNG first, then JPG
                     try {
                       sigImage = await mainPdfDoc.embedPng(sigBytes);
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Scale signature to fit Block 30a area (~200x35 pts)
+                    const sigAreaH = fp["30a_height"] ?? 35;
                     const sigMaxW = 200;
-                    const sigMaxH = 35;
+                    const sigMaxH = Math.min(sigAreaH, 40);
                     const sigScale = Math.min(sigMaxW / sigImage.width, sigMaxH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
+                    const sigX = fp["30a_fill_x"] ?? 25;
+                    const sigY = fp["30a_fill_y"] ?? 75;
                     firstPage.drawImage(sigImage, {
-                      x: 22,
-                      y: 58, // Inside Block 30a signature box
+                      x: sigX,
+                      y: sigY,
                       width: sigW,
                       height: sigH,
                     });
