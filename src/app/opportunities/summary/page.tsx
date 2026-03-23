@@ -22,8 +22,8 @@ import {
 import type { Opportunity } from "@/data/opportunities";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
 
-const API_BASE = "https://arbersaas.duckdns.org/api";
-// const API_BASE = "http://localhost:8000/api";
+// const API_BASE = "https://arbersaas.duckdns.org/api";
+const API_BASE = "http://localhost:8000/api";
 
 interface AISummary {
   projectOverview: string;

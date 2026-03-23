@@ -640,11 +640,14 @@ export default function DraftViewerPage() {
         return y;
       };
 
+      const bidType = (opp.bidType || "RFQ").toUpperCase();
+      const isRFQ = bidType === "RFQ";
+
       // ─── PAGE 1: COVER PAGE ───────────────────────────────────
       doc.setFontSize(24);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 30, 30);
-      doc.text(comp.name || "Company Name", pageWidth / 2, 60, { align: "center" });
+      doc.text((comp.name || "Company Name").toUpperCase() + ",  LLC", pageWidth / 2, 60, { align: "center" });
 
       doc.setFontSize(14);
       doc.setFont("helvetica", "normal");
@@ -693,43 +696,11 @@ export default function DraftViewerPage() {
         y = writeMultiLine(letterContent, y, 10);
       }
 
-      // ─── PAGE 3: TABLE OF CONTENTS ────────────────────────────
+      // ─── PAGE 3: TABLE OF CONTENTS (placeholder — filled after content pages) ───
       doc.addPage();
       addPageHeader(solNum, comp.name);
+      const tocPageNumber = doc.getNumberOfPages(); // remember TOC page to fill later
       y = 28;
-
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 30, 30);
-      doc.text("Contents", margin, y);
-      y += 10;
-
-      const tocItems = [
-        { title: "Federal Contracting Profile", page: "4" },
-        { title: "Volume I — Technical Proposal", page: "–" },
-        { title: "  Factor 1: Technical Capability", page: "–" },
-        { title: "  Factor 2: Management Plan", page: "–" },
-        { title: "  Factor 3: Quality Control Plan", page: "–" },
-        { title: "Volume II — Past Performance", page: "–" },
-        { title: "Volume III — CLIN Pricing Schedule", page: "–" },
-        { title: "Volume IV — Administrative (Reps & Certs)", page: "–" },
-        { title: "Appendix A — FAR/DFARS Certifications", page: "–" },
-        { title: "Appendix B — Certification Documents", page: "–" },
-      ];
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 40);
-      for (const item of tocItems) {
-        const isIndented = item.title.startsWith("  ");
-        const displayTitle = isIndented ? item.title : item.title;
-        const xOff = isIndented ? margin + 8 : margin;
-        if (!isIndented) doc.setFont("helvetica", "bold");
-        else doc.setFont("helvetica", "normal");
-        const dots = ".".repeat(Math.max(5, 80 - displayTitle.length));
-        doc.text(`${displayTitle.trim()} ${dots}`, xOff, y);
-        doc.text(item.page, pageWidth - margin, y, { align: "right" });
-        y += 6;
-      }
 
       // ─── PAGE 4: COMPANY PROFILE (TABLE FORMAT) ──────────────
       doc.addPage();
@@ -741,18 +712,29 @@ export default function DraftViewerPage() {
       y += 10;
 
       // Render profile as a bordered table like the original
+      // Extract POC/phone/email from companyProfile content or use company data
+      const profileContent = getContent("companyProfile");
+      const extractField = (label: string): string => {
+        const match = profileContent.match(new RegExp(`${label}[:\\s]+(.+)`, "i"));
+        return match ? match[1].trim() : "";
+      };
+      const profilePoc = extractField("POC Name") || comp.phone || "";
+      const profilePhone = extractField("Phone") || comp.phone || "";
+      const profileEmail = extractField("Email") || comp.email || "";
+      const profileTaxId = extractField("Taxpayer ID") || extractField("TAXPAYER ID") || "";
+
       const profileRows: [string, string][] = [
-        ["Company Name:", comp.name || "ARBER, LLC"],
+        ["Company Name:", comp.name || ""],
         ["Address:", comp.address || ""],
-        ["POC Name:", "Arthur Beda / Bernard Johnson"],
-        ["Phone:", "(510)926-7836 / (803)727-2921"],
-        ["Email:", "arthur.b@arbernetwork.com / bernard.j@arbernetwork.com"],
-        ["Taxpayer ID #:", "81-5450403"],
+        ["POC Name:", profilePoc],
+        ["Phone:", profilePhone],
+        ["Email:", profileEmail],
+        ["Taxpayer ID #:", profileTaxId],
         ["PSC/NAICS Code:", comp.naicsCode || data.opportunity?.naicsCode || ""],
         ["SAM.gov Registered:", comp.samStatus ? "Yes" : "Yes"],
-        ["SAM Unique Entity ID:", comp.uei || "N89HSS1G2UC5"],
-        ["CAGE:", comp.cageCode || "9EVL2"],
-        ["Total Small Business:", comp.businessType || "Yes"],
+        ["SAM Unique Entity ID:", comp.uei || ""],
+        ["CAGE:", comp.cageCode || ""],
+        ["Business Type:", comp.businessType || "Small Business"],
       ];
 
       const profileTableWidth = maxWidth;
@@ -786,80 +768,89 @@ export default function DraftViewerPage() {
 
       // ─── NOTE: Compliance Matrix is INTERNAL ONLY — not included in submitted PDF ───
 
-      // ─── VOLUME I: TECHNICAL CAPABILITY ──────────────────────
+      // Track page numbers for TOC
+      const tocEntries: { title: string; page: number; indent?: boolean }[] = [];
+      tocEntries.push({ title: `${comp.name}, Federal Contracting Profile`, page: doc.getNumberOfPages() + 1 });
+
+      // ─── VOLUME I: TECHNICAL CAPABILITY (RFP only) ──────────────────────
       const techContent = cleanContentForPdf(getContent("technicalCapability"));
-      if (techContent) {
+      if (!isRFQ && techContent) {
         doc.addPage();
         addPageHeader(solNum, comp.name);
         y = 22;
+        tocEntries.push({ title: "Volume I — Technical Proposal", page: doc.getNumberOfPages() });
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(30, 30, 30);
         doc.text("Volume I — Technical Proposal", margin, y);
         y += 10;
         y = writeMultiLine(techContent, y, 10);
-      }
 
-      // ─── MANAGEMENT PLAN ──────────────────────────────────────
-      const mgmtContent = cleanContentForPdf(getContent("managementPlan"));
-      if (mgmtContent) {
-        // Continue on same or new page depending on space
-        if (y + 30 > pageHeight - 20) {
+        // ─── MANAGEMENT PLAN (RFP only) ──────────────────────────────────────
+        const mgmtContent = cleanContentForPdf(getContent("managementPlan"));
+        if (mgmtContent) {
+          if (y + 30 > pageHeight - 20) {
+            doc.addPage();
+            addPageHeader(solNum, comp.name);
+            y = 22;
+          } else {
+            y += 6;
+          }
+          tocEntries.push({ title: "Factor 2: Management Plan", page: doc.getNumberOfPages(), indent: true });
+          doc.setFontSize(12);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 30, 30);
+          doc.text("Factor 2 — Management Plan", margin, y);
+          y += 10;
+          y = writeMultiLine(mgmtContent, y, 10);
+        }
+
+        // ─── QUALITY CONTROL PLAN (RFP only) ──────────────────────────────────
+        const qcContent = cleanContentForPdf(getContent("qualityControlPlan"));
+        if (qcContent) {
+          if (y + 30 > pageHeight - 20) {
+            doc.addPage();
+            addPageHeader(solNum, comp.name);
+            y = 22;
+          } else {
+            y += 6;
+          }
+          tocEntries.push({ title: "Factor 3: Quality Control Plan", page: doc.getNumberOfPages(), indent: true });
+          doc.setFontSize(12);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 30, 30);
+          doc.text("Factor 3 — Quality Control Plan", margin, y);
+          y += 10;
+          y = writeMultiLine(qcContent, y, 10);
+        }
+
+        // ─── VOLUME II: PAST PERFORMANCE (RFP only) ───────────────────────────
+        const ppContent = cleanContentForPdf(getContent("pastPerformance"));
+        if (ppContent) {
           doc.addPage();
           addPageHeader(solNum, comp.name);
           y = 22;
-        } else {
-          y += 6;
+          tocEntries.push({ title: "Volume II — Past Performance", page: doc.getNumberOfPages() });
+          doc.setFontSize(12);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 30, 30);
+          doc.text("Volume II — Past Performance", margin, y);
+          y += 10;
+          y = writeMultiLine(ppContent, y, 10);
         }
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        doc.text("Factor 2 — Management Plan", margin, y);
-        y += 10;
-        y = writeMultiLine(mgmtContent, y, 10);
       }
 
-      // ─── QUALITY CONTROL PLAN ──────────────────────────────────
-      const qcContent = cleanContentForPdf(getContent("qualityControlPlan"));
-      if (qcContent) {
-        if (y + 30 > pageHeight - 20) {
-          doc.addPage();
-          addPageHeader(solNum, comp.name);
-          y = 22;
-        } else {
-          y += 6;
-        }
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        doc.text("Factor 3 — Quality Control Plan", margin, y);
-        y += 10;
-        y = writeMultiLine(qcContent, y, 10);
-      }
-
-      // ─── VOLUME II: PAST PERFORMANCE ───────────────────────────
-      const ppContent = cleanContentForPdf(getContent("pastPerformance"));
-      if (ppContent) {
-        doc.addPage();
-        addPageHeader(solNum, comp.name);
-        y = 22;
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        doc.text("Volume II — Past Performance", margin, y);
-        y += 10;
-        y = writeMultiLine(ppContent, y, 10);
-      }
-
-      // ─── VOLUME III: CLIN PRICING (TABLE FORMAT) ───────────────
+      // ─── CLIN PRICING (both RFQ and RFP) ───────────────
       doc.addPage();
       addPageHeader(solNum, comp.name);
       y = 22;
 
+      const clinLabel = isRFQ ? "CLIN" : "Volume III — CLIN Pricing Schedule";
+      tocEntries.push({ title: isRFQ ? "CLIN" : "Volume III — CLIN Pricing Schedule", page: doc.getNumberOfPages() });
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 30, 30);
-      doc.text("Volume III — CLIN Pricing Schedule", margin, y);
+      doc.text(clinLabel, margin, y);
       y += 8;
 
       // Try to parse structured CLIN data for table rendering
@@ -996,47 +987,66 @@ export default function DraftViewerPage() {
       }
 
       // ─── VOLUME IV: REPS & CERTS ───────────────────────────────
-      doc.addPage();
-      addPageHeader(solNum, comp.name);
-      y = 28;
-
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 30, 30);
-      doc.text("Volume IV — Representations and Certifications", pageWidth / 2, y, { align: "center" });
-      y += 12;
-
+      // ─── REPS & CERTS ───────────────────────────────
       const repsContent = cleanContentForPdf(getContent("repsAndCerts"));
       if (repsContent) {
+        doc.addPage();
+        addPageHeader(solNum, comp.name);
+        y = 28;
+        const repsLabel = isRFQ ? "Representations and Certifications" : "Volume IV — Representations and Certifications";
+        tocEntries.push({ title: repsLabel, page: doc.getNumberOfPages() });
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(repsLabel, pageWidth / 2, y, { align: "center" });
+        y += 12;
         y = writeMultiLine(repsContent, y, 9);
       }
 
-      // ─── MERGE WITH DFARS PDF ──────────────────────────────────
-      // Convert jsPDF output to ArrayBuffer
-      const mainPdfBytes = doc.output("arraybuffer");
+      // ─── NOW FILL THE TOC PAGE ────────────────────────────────
+      // Go back to the TOC page and render the entries with real page numbers
+      doc.setPage(tocPageNumber);
+      let tocY = 28;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text("Contents", margin, tocY);
+      tocY += 10;
 
-      // Load the main PDF into pdf-lib
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      for (const entry of tocEntries) {
+        const xOff = entry.indent ? margin + 8 : margin;
+        doc.setFont("helvetica", entry.indent ? "normal" : "bold");
+        const dots = ".".repeat(Math.max(5, 80 - entry.title.length));
+        doc.text(`${entry.title} ${dots}`, xOff, tocY);
+        doc.text(String(entry.page), pageWidth - margin, tocY, { align: "right" });
+        tocY += 6;
+      }
+      // Add Appendix A entry (DFARS) — page unknown until merge, show as "Appended"
+      doc.setFont("helvetica", "bold");
+      const appendixTitle = "Appendix A — FAR/DFARS Certifications";
+      const appDots = ".".repeat(Math.max(5, 80 - appendixTitle.length));
+      doc.text(`${appendixTitle} ${appDots}`, margin, tocY);
+      doc.text("Appended", pageWidth - margin, tocY, { align: "right" });
+
+      // ─── MERGE WITH DFARS PDF ──────────────────────────────────
+      const mainPdfBytes = doc.output("arraybuffer");
       const mainPdfDoc = await PDFDocument.load(mainPdfBytes);
 
       // Add a separator page before DFARS
-      const separatorPage = mainPdfDoc.addPage([612, 792]); // Letter size in points
       const { rgb } = await import("pdf-lib");
+      const separatorPage = mainPdfDoc.addPage([612, 792]);
       separatorPage.drawText("Appendix A", {
-        x: 220,
-        y: 450,
-        size: 28,
+        x: 220, y: 450, size: 28,
         color: rgb(0.12, 0.16, 0.23),
       });
       separatorPage.drawText("FAR & DFARS Representations and Certifications", {
-        x: 110,
-        y: 410,
-        size: 16,
+        x: 110, y: 410, size: 16,
         color: rgb(0.35, 0.35, 0.35),
       });
       separatorPage.drawText(`${comp.name} — SAM.gov Certified`, {
-        x: 180,
-        y: 370,
-        size: 12,
+        x: 180, y: 370, size: 12,
         color: rgb(0.5, 0.5, 0.5),
       });
 
@@ -1053,55 +1063,6 @@ export default function DraftViewerPage() {
         }
       } catch (err) {
         console.warn("Could not merge DFARS PDF:", err);
-      }
-
-      // ─── MERGE UPLOADED CERTIFICATION PDFs ──────────────────────
-      try {
-        const certToken = localStorage.getItem("arber_token");
-        const certListResp = await fetch(`${API_BASE}/certifications`, {
-          headers: { Authorization: `Bearer ${certToken}` },
-        });
-        if (certListResp.ok) {
-          const certList: { id: string; fileName: string }[] = await certListResp.json();
-          if (certList.length > 0) {
-            // Add separator page for certifications
-            const certSeparator = mainPdfDoc.addPage([612, 792]);
-            certSeparator.drawText("Appendix B", {
-              x: 220, y: 450, size: 28,
-              color: rgb(0.12, 0.16, 0.23),
-            });
-            certSeparator.drawText("Certification Documents", {
-              x: 180, y: 410, size: 16,
-              color: rgb(0.35, 0.35, 0.35),
-            });
-            const certNames = certList.map((c) => c.fileName).join(", ");
-            certSeparator.drawText(certNames, {
-              x: 72, y: 370, size: 10,
-              color: rgb(0.5, 0.5, 0.5),
-            });
-
-            // Download and merge each cert PDF
-            for (const cert of certList) {
-              try {
-                const certResp = await fetch(`${API_BASE}/certifications/${cert.id}/download`, {
-                  headers: { Authorization: `Bearer ${certToken}` },
-                });
-                if (certResp.ok) {
-                  const certBytes = await certResp.arrayBuffer();
-                  const certPdf = await PDFDocument.load(certBytes);
-                  const certPages = await mainPdfDoc.copyPages(certPdf, certPdf.getPageIndices());
-                  for (const page of certPages) {
-                    mainPdfDoc.addPage(page);
-                  }
-                }
-              } catch (certErr) {
-                console.warn(`Could not merge cert ${cert.fileName}:`, certErr);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch certification files:", err);
       }
 
       // Save merged PDF and download
@@ -1138,7 +1099,14 @@ export default function DraftViewerPage() {
   const opp = data.opportunity || { title: "", agency: "", noticeId: "", naicsCode: "", dueDate: "", bidType: "" };
   const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [] };
 
-  const sections = SECTION_DEFS.filter((s) => getContent(s.key));
+  // For RFQ: hide technical sections (technicalCapability, managementPlan, qualityControlPlan, pastPerformance)
+  const currentBidType = (data?.opportunity?.bidType || "RFQ").toUpperCase();
+  const rfqHiddenSections = ["technicalCapability", "managementPlan", "qualityControlPlan", "pastPerformance"];
+  const sections = SECTION_DEFS.filter((s) => {
+    if (!getContent(s.key)) return false;
+    if (currentBidType === "RFQ" && rfqHiddenSections.includes(s.key)) return false;
+    return true;
+  });
   const currentSection = sections[activeSection] || sections[0];
 
   return (
@@ -1147,7 +1115,7 @@ export default function DraftViewerPage() {
       <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%)" }}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
           <button
-            onClick={() => window.close()}
+            onClick={() => { window.history.length > 1 ? window.history.back() : (window.location.href = "/proposals"); }}
             className="flex items-center gap-1.5 text-white/60 hover:text-white text-xs sm:text-sm mb-3 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1345,14 +1313,15 @@ export default function DraftViewerPage() {
                       </span>
                       <button
                         onClick={() => {
-                          if (confirm("Clear this section? It will be excluded from the PDF.")) {
+                          if (confirm("Delete this section? It will be removed from the draft and PDF.")) {
                             updateContent(currentSection?.key || "", "");
+                            setActiveSection(Math.max(0, activeSection - 1));
                           }
                         }}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors border border-slate-200"
-                        title="Clear section (will be excluded from PDF)"
+                        title="Delete section (removes from draft and PDF)"
                       >
-                        <Trash2 className="w-3 h-3" /> Clear
+                        <Trash2 className="w-3 h-3" /> Delete Section
                       </button>
                     </>
                   ) : (
