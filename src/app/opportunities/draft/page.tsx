@@ -1117,7 +1117,7 @@ export default function DraftViewerPage() {
                   });
                 }
 
-                // Block 30a: Draw signature image
+                // Block 30a: Draw signature image — fill most of the 30a box
                 if (sf1449Data.signatureBase64) {
                   try {
                     const sigBytes = Uint8Array.from(atob(sf1449Data.signatureBase64), c => c.charCodeAt(0));
@@ -1127,13 +1127,13 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    const sigAreaH = fp["30a_height"] ?? 50;
-                    const sigMaxW = 350;
-                    const sigMaxH = Math.min(sigAreaH, 60);
-                    const sigScale = Math.min(sigMaxW / sigImage.width, sigMaxH / sigImage.height);
+                    // Fixed generous size — ignore area height constraint
+                    const targetW = 300;
+                    const targetH = 55;
+                    const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    const sigX = fp["30a_fill_x"] ?? 25;
+                    const sigX = fp["30a_fill_x"] ?? 30;
                     const sigY = fp["30a_fill_y"] ?? 75;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
