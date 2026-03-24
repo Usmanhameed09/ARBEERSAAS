@@ -16,6 +16,7 @@ import {
   PenTool,
   Save,
   Edit3,
+  Eye,
   CheckCircle2,
   Briefcase,
   Settings,
@@ -580,7 +581,7 @@ export default function DraftViewerPage() {
     });
   }, [getContent]);
 
-  const handleDownloadPdf = useCallback(async () => {
+  const handleDownloadPdf = useCallback(async (mode: "download" | "preview" = "download") => {
     if (!data?.draft) return;
     setGeneratingPdf(true);
 
@@ -1222,15 +1223,23 @@ export default function DraftViewerPage() {
       // Save merged PDF and download
       const mergedBytes = await mainPdfDoc.save();
       const blob = new Blob([mergedBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
       const filename = `${comp.name || "Company"}_SOL_${solNum}_Response.pdf`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      if (mode === "preview") {
+        const previewUrl = URL.createObjectURL(blob);
+        window.open(previewUrl, "_blank", "noopener,noreferrer");
+        // Delay revoke to allow the new tab to load the PDF
+        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
       console.error("PDF generation error:", err);
       alert("Failed to generate PDF. Please try again.");
@@ -1348,7 +1357,16 @@ export default function DraftViewerPage() {
                 {copied ? "Copied!" : "Copy All"}
               </button>
               <button
-                onClick={handleDownloadPdf}
+                onClick={() => handleDownloadPdf("preview")}
+                disabled={generatingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-colors disabled:opacity-40"
+              >
+                {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{generatingPdf ? "Generating PDF..." : "Preview PDF"}</span>
+                <span className="sm:hidden">{generatingPdf ? "PDF..." : "Preview"}</span>
+              </button>
+              <button
+                onClick={() => handleDownloadPdf("download")}
                 disabled={generatingPdf}
                 className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition-colors"
               >
