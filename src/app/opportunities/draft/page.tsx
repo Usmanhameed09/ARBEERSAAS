@@ -408,10 +408,15 @@ export default function DraftViewerPage() {
     setSaveStatus("saving");
     try {
       console.log("[triggerSave] saving draft", curDraftId, "sections:", Object.keys(curContent));
+      // Preserve attachmentAnalysis in opportunityJson so it persists
+      const oppJson = { ...(curData.opportunity || {}) } as Record<string, unknown>;
+      if (curData.attachmentAnalysis) {
+        oppJson.attachmentAnalysis = curData.attachmentAnalysis;
+      }
       const result = await saveDraft({
         draftId: curDraftId,
         sectionsJson: curContent,
-        opportunityJson: (curData.opportunity || {}) as Record<string, unknown>,
+        opportunityJson: oppJson,
         companyJson: (curData.company || {}) as Record<string, unknown>,
         title: curData.opportunity?.title || curData.draft?.draftTitle || "Untitled Draft",
         pageLimits: pageLimitsRef.current,
@@ -443,10 +448,15 @@ export default function DraftViewerPage() {
     setSaveStatus("saving");
     try {
       console.log("[saveAsNewVersion] creating new version from", curDraftId);
+      // Preserve attachmentAnalysis in opportunityJson
+      const oppJson2 = { ...(curData.opportunity || {}) } as Record<string, unknown>;
+      if (curData.attachmentAnalysis) {
+        oppJson2.attachmentAnalysis = curData.attachmentAnalysis;
+      }
       const result = await saveDraft({
         draftId: curDraftId,
         sectionsJson: curContent,
-        opportunityJson: (curData.opportunity || {}) as Record<string, unknown>,
+        opportunityJson: oppJson2,
         companyJson: (curData.company || {}) as Record<string, unknown>,
         title: curData.opportunity?.title || curData.draft?.draftTitle || "Untitled Draft",
         pageLimits: pageLimitsRef.current,
@@ -1068,13 +1078,13 @@ export default function DraftViewerPage() {
               // Only copy the first page of SF1449 (limit to 1 page)
               const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, [0]);
 
-              // Insert SF1449 as the very first page
-              mainPdfDoc.insertPage(0, sf1449Pages[0]);
+              // Insert SF1449 as the second page (after cover page)
+              mainPdfDoc.insertPage(1, sf1449Pages[0]);
 
               // Overlay company info via pdf-lib using detected field positions
               {
                 const { rgb: sfRgb } = await import("pdf-lib");
-                const firstPage = mainPdfDoc.getPage(0);
+                const firstPage = mainPdfDoc.getPage(1); // SF1449 is now page 2 (index 1)
                 const pgWidth = firstPage.getWidth();
                 const pgHeight = firstPage.getHeight();
 
@@ -1085,11 +1095,11 @@ export default function DraftViewerPage() {
                 const dateStr = new Date().toLocaleDateString("en-US");
 
                 if (!sf1449Data.filled) {
-                  // Block 12: Discount Terms
+                  // Block 12: Discount Terms — large font, below the label
                   const b12x = fp["12_fill_x"] ?? 200;
-                  const b12y = fp["12_fill_y"] ?? (pgHeight - 200);
+                  const b12y = fp["12_fill_y"] ?? (pgHeight - 210);
                   firstPage.drawText("NET 30", {
-                    x: b12x, y: b12y, size: 9, color: sfRgb(0, 0, 0),
+                    x: b12x, y: b12y, size: 12, color: sfRgb(0, 0, 0),
                   });
 
                   // Block 17a: Contractor/Offeror name, address, phone, email
@@ -1148,18 +1158,18 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Fit signature — fill 30a box, right-aligned
-                    const boxH = fp["30a_height"] ? Number(fp["30a_height"]) : 45;
-                    // Use full box height and generous width
-                    const targetW = 280;
-                    const targetH = Math.max(boxH, 45);
+                    // Fit signature — fill 30a box generously, right-center
+                    const boxH = fp["30a_height"] ? Number(fp["30a_height"]) : 35;
+                    // Scale to fill the box — use generous minimums
+                    const targetH = Math.max(boxH, 35);
+                    const targetW = targetH * 4; // wide aspect for signature
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    // Push to right side — near the 31a border (half page width ~306 for letter)
+                    // Right-center in 30a box — at ~42% of page width
                     const halfPage = pgWidth / 2;
-                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : Math.max(halfPage - sigW - 10, 180);
-                    const sigY = fp["30a_fill_y"] ?? 60;
+                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : Math.max(halfPage - sigW, 200);
+                    const sigY = fp["30a_fill_y"] ?? 65;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
                       y: sigY,
