@@ -361,9 +361,14 @@ export default function DraftViewerPage() {
 
     async function autoSaveToBackend(parsed: DraftResult) {
       try {
+        // Include attachmentAnalysis in opportunityJson so it persists across loads
+        const oppJson = { ...(parsed.opportunity || {}) } as Record<string, unknown>;
+        if (parsed.attachmentAnalysis) {
+          oppJson.attachmentAnalysis = parsed.attachmentAnalysis;
+        }
         const result = await saveDraft({
           sectionsJson: parsed.draft as unknown as Record<string, string>,
-          opportunityJson: (parsed.opportunity || {}) as Record<string, unknown>,
+          opportunityJson: oppJson,
           companyJson: (parsed.company || {}) as Record<string, unknown>,
           title: parsed.opportunity?.title || parsed.draft?.draftTitle || "Untitled Draft",
         });
@@ -1143,14 +1148,14 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Fit signature within 30a box — constrained height
-                    const targetW = 180;
-                    const targetH = fp["30a_height"] ? Number(fp["30a_height"]) : 28;
+                    // Fit signature within 30a box
+                    const targetW = 200;
+                    const targetH = fp["30a_height"] ? Number(fp["30a_height"]) : 35;
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    const sigX = fp["30a_fill_x"] ?? 90;
-                    const sigY = fp["30a_fill_y"] ?? 62;
+                    const sigX = fp["30a_fill_x"] ?? 130;
+                    const sigY = fp["30a_fill_y"] ?? 65;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
                       y: sigY,
