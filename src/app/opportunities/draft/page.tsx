@@ -1128,7 +1128,7 @@ export default function DraftViewerPage() {
                   if (comp.cageCode) {
                     const codeX = fp["17a_code_fill_x"] ?? 220;
                     // Nudge upward a bit to center better in the CODE box
-                    const codeYOffset = 17;
+                    const codeYOffset = 20;
                     const codeY = (fp["17a_code_fill_y"] ?? b17y + 10) + codeYOffset;
                     firstPage.drawText(comp.cageCode, {
                       x: codeX, y: codeY, size: 8, color: sfRgb(0, 0, 0),
