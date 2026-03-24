@@ -1127,7 +1127,7 @@ export default function DraftViewerPage() {
                   // Block 17a CODE box: CAGE code
                   if (comp.cageCode) {
                     const codeX = fp["17a_code_fill_x"] ?? 220;
-                    const codeY = fp["17a_code_fill_y"] ?? b17y;
+                    const codeY = fp["17a_code_fill_y"] ?? b17y+10;
                     firstPage.drawText(comp.cageCode, {
                       x: codeX, y: codeY, size: 8, color: sfRgb(0, 0, 0),
                     });
