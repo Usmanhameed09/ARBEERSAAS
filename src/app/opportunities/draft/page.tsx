@@ -1227,8 +1227,14 @@ export default function DraftViewerPage() {
 
       if (mode === "preview") {
         const previewUrl = URL.createObjectURL(blob);
-        window.open(previewUrl, "_blank", "noopener,noreferrer");
-        // Delay revoke to allow the new tab to load the PDF
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        if (isMobile) {
+          // Mobile browsers often block window.open for blob URLs
+          window.location.href = previewUrl;
+        } else {
+          window.open(previewUrl, "_blank", "noopener,noreferrer");
+        }
+        // Delay revoke to allow the new tab/page to load the PDF
         setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
       } else {
         const url = URL.createObjectURL(blob);
