@@ -1143,14 +1143,14 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Fixed generous size — ignore area height constraint
-                    const targetW = 220;
-                    const targetH = 42;
+                    // Fit signature within 30a box — constrained height
+                    const targetW = 180;
+                    const targetH = fp["30a_height"] ? Number(fp["30a_height"]) : 28;
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
                     const sigX = fp["30a_fill_x"] ?? 90;
-                    const sigY = fp["30a_fill_y"] ?? 75;
+                    const sigY = fp["30a_fill_y"] ?? 62;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
                       y: sigY,
