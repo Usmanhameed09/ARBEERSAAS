@@ -1166,7 +1166,7 @@ export default function DraftViewerPage() {
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
                     // Left-center in 30a box
-                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : 150;
+                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : 220;
                     const sigY = fp["30a_fill_y"] ?? 65;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
