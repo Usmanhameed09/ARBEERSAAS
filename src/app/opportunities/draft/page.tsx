@@ -1080,7 +1080,14 @@ export default function DraftViewerPage() {
                 const dateStr = new Date().toLocaleDateString("en-US");
 
                 if (!sf1449Data.filled) {
-                  // Block 17a: Contractor/Offeror name, address, phone
+                  // Block 12: Discount Terms
+                  const b12x = fp["12_fill_x"] ?? 200;
+                  const b12y = fp["12_fill_y"] ?? (pgHeight - 200);
+                  firstPage.drawText("NET 30", {
+                    x: b12x, y: b12y, size: 9, color: sfRgb(0, 0, 0),
+                  });
+
+                  // Block 17a: Contractor/Offeror name, address, phone, email
                   const b17x = fp["17a_fill_x"] ?? 36;
                   const b17y = fp["17a_fill_y"] ?? (pgHeight - 262);
                   firstPage.drawText(comp.name || "", {
@@ -1099,6 +1106,15 @@ export default function DraftViewerPage() {
                   if (comp.email) {
                     firstPage.drawText(comp.email, {
                       x: b17x, y: b17y - 33, size: 7, color: sfRgb(0, 0, 0),
+                    });
+                  }
+
+                  // Block 17a CODE box: CAGE code
+                  if (comp.cageCode) {
+                    const codeX = fp["17a_code_fill_x"] ?? 220;
+                    const codeY = fp["17a_code_fill_y"] ?? b17y;
+                    firstPage.drawText(comp.cageCode, {
+                      x: codeX, y: codeY, size: 8, color: sfRgb(0, 0, 0),
                     });
                   }
 
@@ -1133,7 +1149,7 @@ export default function DraftViewerPage() {
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    const sigX = fp["30a_fill_x"] ?? 30;
+                    const sigX = fp["30a_fill_x"] ?? 90;
                     const sigY = fp["30a_fill_y"] ?? 75;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
