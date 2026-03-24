@@ -1148,14 +1148,18 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Fit signature — larger, right side of 30a box
-                    const targetW = 220;
-                    const targetH = fp["30a_height"] ? Number(fp["30a_height"]) : 45;
+                    // Fit signature — fill 30a box, right-aligned
+                    const boxH = fp["30a_height"] ? Number(fp["30a_height"]) : 45;
+                    // Use full box height and generous width
+                    const targetW = 280;
+                    const targetH = Math.max(boxH, 45);
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    const sigX = fp["30a_fill_x"] ?? 170;
-                    const sigY = fp["30a_fill_y"] ?? 63;
+                    // Push to right side — near the 31a border (half page width ~306 for letter)
+                    const halfPage = pgWidth / 2;
+                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : Math.max(halfPage - sigW - 10, 180);
+                    const sigY = fp["30a_fill_y"] ?? 60;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
                       y: sigY,
