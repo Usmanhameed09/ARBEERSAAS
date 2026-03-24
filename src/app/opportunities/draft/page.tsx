@@ -1158,17 +1158,15 @@ export default function DraftViewerPage() {
                     } catch {
                       sigImage = await mainPdfDoc.embedJpg(sigBytes);
                     }
-                    // Fit signature — fill 30a box generously, right-center
+                    // Fit signature — fill 30a box generously, left-center
                     const boxH = fp["30a_height"] ? Number(fp["30a_height"]) : 35;
-                    // Scale to fill the box — use generous minimums
-                    const targetH = Math.max(boxH, 35);
-                    const targetW = targetH * 4; // wide aspect for signature
+                    const targetH = Math.max(boxH, 38);
+                    const targetW = targetH * 5; // wide for signature
                     const sigScale = Math.min(targetW / sigImage.width, targetH / sigImage.height);
                     const sigW = sigImage.width * sigScale;
                     const sigH = sigImage.height * sigScale;
-                    // Right-center in 30a box — at ~42% of page width
-                    const halfPage = pgWidth / 2;
-                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : Math.max(halfPage - sigW, 200);
+                    // Left-center in 30a box
+                    const sigX = fp["30a_fill_x"] ? Number(fp["30a_fill_x"]) : 150;
                     const sigY = fp["30a_fill_y"] ?? 65;
                     firstPage.drawImage(sigImage, {
                       x: sigX,
