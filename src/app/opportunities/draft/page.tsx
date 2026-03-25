@@ -1008,9 +1008,20 @@ export default function DraftViewerPage() {
             doc.setFontSize(6);
             doc.setFont("helvetica", "italic");
             doc.setTextColor(100, 100, 100);
+            const descMaxWidth = tableWidth - colWidths[0] - 2;
             if (descLines.length > 1) {
-              doc.text(descLines.slice(1).join(" "), tableX + colWidths[0] + 1, y);
-              y += subRowHeight;
+              const remainingDesc = descLines.slice(1).join(" ");
+              const wrappedRemaining = doc.splitTextToSize(remainingDesc, descMaxWidth);
+              for (const wLine of wrappedRemaining) {
+                if (y + subRowHeight > pageHeight - 20) {
+                  doc.addPage();
+                  addPageHeader(solNum, comp.name);
+                  y = 22;
+                  drawTableHeader();
+                }
+                doc.text(wLine, tableX + colWidths[0] + 1, y);
+                y += subRowHeight;
+              }
             }
             doc.text(`PSC: ${item.psc} | ${item.pricingArrangement}`, tableX + colWidths[0] + 1, y);
             y += subRowHeight;
