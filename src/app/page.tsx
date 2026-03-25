@@ -95,9 +95,7 @@ export default function Dashboard() {
   }, [savedIds.size]);
 
   const statusCards = [
-    { icon: OpportunityStackIcon, label: "Archived Opportunities", count: stats.archivedOpportunities, iconBg: "bg-transparent", iconColor: "", href: "/opportunities/pipeline" },
-    { icon: QualifiedSealIcon, label: "Qualified (Go)", count: stats.qualified, iconBg: "bg-transparent", iconColor: "", href: "/opportunities/pipeline" },
-    { icon: NoGoShieldIcon, label: "No-Go", count: stats.noGo, iconBg: "bg-transparent", iconColor: "" },
+    { icon: OpportunityStackIcon, label: "Archived Opportunities", count: stats.archivedOpportunities, iconBg: "bg-transparent", iconColor: "", href: "/opportunities/pipeline", subtitle: `Go: ${stats.qualified} | No-Go: ${stats.noGo}` },
     { icon: PricingHandshakeIcon, label: "Active Drafts", count: stats.activeDrafts, iconBg: "bg-transparent", iconColor: "", href: "/proposals" },
     { icon: DraftClipboardIcon, label: "Ready for Review", count: stats.draftsReady, iconBg: "bg-transparent", iconColor: "", href: "/proposals" },
     { icon: SentPlaneIcon, label: "Submitted", count: stats.submitted, iconBg: "bg-transparent", iconColor: "" },

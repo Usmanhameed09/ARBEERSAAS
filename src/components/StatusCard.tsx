@@ -8,6 +8,7 @@ interface StatusCardProps {
   iconBg: string;
   iconColor: string;
   href?: string;
+  subtitle?: string;
 }
 
 export default function StatusCard({
@@ -17,6 +18,7 @@ export default function StatusCard({
   iconBg,
   iconColor,
   href,
+  subtitle,
 }: StatusCardProps) {
   const content = (
     <>
@@ -38,6 +40,9 @@ export default function StatusCard({
         </div>
         <p className="text-2xl sm:text-[2.1rem] font-bold text-slate-900 leading-none">{count}</p>
       </div>
+      {subtitle && (
+        <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium mt-1.5">{subtitle}</p>
+      )}
     </>
   );
 
