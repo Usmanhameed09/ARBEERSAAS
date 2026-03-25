@@ -11,7 +11,7 @@ import {
   DraftClipboardIcon,
   SentPlaneIcon,
 } from "@/components/DashboardRealisticIcons";
-import { API_BASE, listDrafts, fetchSavedOpportunities } from "@/lib/api";
+import { listDrafts, fetchSavedOpportunities, loadOpportunitiesFromDB } from "@/lib/api";
 import type { SavedDraft } from "@/lib/api";
 import type { Opportunity } from "@/data/opportunities";
 import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
@@ -45,7 +45,6 @@ export default function Dashboard() {
       try {
         const token = localStorage.getItem("arber_token");
         if (!token) { setLoading(false); return; }
-        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
         // Fetch drafts
         const draftResult = await listDrafts();
@@ -62,20 +61,15 @@ export default function Dashboard() {
         const inProgressCount = allDrafts.filter((d) => d.status === "in_progress").length;
         const submittedCount = allDrafts.filter((d) => d.status === "submitted").length;
 
-        // Fetch pipeline items for qualified/no-go/archived counts
+        // Fetch archived opportunities for Go/No-Go counts (same source as All Opps page)
         let qualified = 0;
         let noGo = 0;
         try {
-          const pipeResp = await fetch(`${API_BASE}/pipeline/items`, { headers });
-          if (pipeResp.ok) {
-            const pipeData = await pipeResp.json();
-            const items = pipeData.items || pipeData || [];
-            if (Array.isArray(items)) {
-              qualified = items.filter((i: Record<string, unknown>) => i.go_no_go === "Go" || i.status === "qualified").length;
-              noGo = items.filter((i: Record<string, unknown>) => i.go_no_go === "No-Go" || i.status === "no_go").length;
-            }
-          }
-        } catch { /* no pipeline data */ }
+          const archResult = await loadOpportunitiesFromDB("_");
+          const archOpps = (archResult.opportunities || []).filter((o: Opportunity & { isSaved?: boolean }) => !o.isSaved);
+          qualified = archOpps.filter((o: Opportunity) => o.status === "Go").length;
+          noGo = archOpps.filter((o: Opportunity) => o.status === "No-Go").length;
+        } catch { /* no archived data */ }
 
         setStats({
           archivedOpportunities: qualified + noGo,

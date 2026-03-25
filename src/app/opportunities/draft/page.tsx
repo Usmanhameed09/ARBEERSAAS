@@ -1141,11 +1141,14 @@ export default function DraftViewerPage() {
               }
 
               const sf1449Pdf = await PDFDocument.load(sf1449Bytes.buffer);
-              // Only copy the first page of SF1449 (limit to 1 page)
-              const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, [0]);
+              // Copy ALL SF1449 pages (some forms span multiple pages)
+              const allPageIndices = Array.from({ length: sf1449Pdf.getPageCount() }, (_, i) => i);
+              const sf1449Pages = await mainPdfDoc.copyPages(sf1449Pdf, allPageIndices);
 
-              // Insert SF1449 as the second page (after cover page)
-              mainPdfDoc.insertPage(1, sf1449Pages[0]);
+              // Insert all SF1449 pages after cover page
+              for (let pi = 0; pi < sf1449Pages.length; pi++) {
+                mainPdfDoc.insertPage(1 + pi, sf1449Pages[pi]);
+              }
 
               // Overlay company info via pdf-lib using detected field positions
               {
