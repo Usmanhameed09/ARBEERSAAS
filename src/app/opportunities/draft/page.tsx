@@ -1173,7 +1173,7 @@ export default function DraftViewerPage() {
 
                   // Block 17a: Contractor/Offeror name, address, phone, email
                   const b17x = fp["17a_fill_x"] ?? 36;
-                  const b17y = fp["17a_fill_y"] ?? (pgHeight - 262);
+                  const b17y = fp["17a_fill_y"] ?? (pgHeight - 280);
                   firstPage.drawText(comp.name || "", {
                     x: b17x, y: b17y, size: 8, color: sfRgb(0, 0, 0),
                   });
@@ -1197,7 +1197,7 @@ export default function DraftViewerPage() {
                   if (comp.cageCode) {
                     const codeX = fp["17a_code_fill_x"] ?? 220;
                     // Nudge upward a bit to center better in the CODE box
-                    const codeYOffset = 22;
+                    const codeYOffset = 20;
                     const codeY = (fp["17a_code_fill_y"] ?? b17y + 10) + codeYOffset;
                     firstPage.drawText(comp.cageCode, {
                       x: codeX, y: codeY, size: 9, color: sfRgb(0, 0, 0),
