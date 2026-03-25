@@ -292,6 +292,9 @@ export default function DraftViewerPage() {
   const [pageLimits, setPageLimits] = useState<PageLimit[]>([]);
   const [formattingReqs, setFormattingReqs] = useState<FormattingReq[]>([]);
 
+  // Excel pricing state
+  const [excelDownloading, setExcelDownloading] = useState(false);
+
   // Helper to initialize editedContent from draft data
   const initializeContent = useCallback((draft: Record<string, string>) => {
     const d = draft;
@@ -569,6 +572,42 @@ export default function DraftViewerPage() {
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     return Math.ceil(wordCount / 250); // ~250 words per page
   };
+
+  // Download filled Excel pricing sheet
+  const handleDownloadPricingExcel = useCallback(async () => {
+    if (!data?.attachmentAnalysis?.pricingFormatUrl) return;
+    setExcelDownloading(true);
+    try {
+      const clinContent = getContent("clinData") || data.draft?.clinData || "";
+      let clinParsed: unknown[] = [];
+      try { clinParsed = JSON.parse(clinContent); } catch { /* text format */ }
+
+      const resp = await fetch(`${API_BASE}/draft/fill-pricing-excel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("arber_token")}` },
+        body: JSON.stringify({
+          sourceUrl: data.attachmentAnalysis.pricingFormatUrl,
+          clinData: clinParsed,
+          filename: data.attachmentAnalysis.pricingFormatSource || "Pricing_Schedule.xlsx",
+        }),
+      });
+      const result = await resp.json();
+      if (result.success && result.excelBase64) {
+        const bytes = Uint8Array.from(atob(result.excelBase64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.filename || "Pricing_Schedule_Filled.xlsx";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error("Excel download error:", err);
+    } finally {
+      setExcelDownloading(false);
+    }
+  }, [data, getContent]);
 
   const handleCopyAll = useCallback(() => {
     const sections = SECTION_DEFS.filter((s) => getContent(s.key));
@@ -857,6 +896,9 @@ export default function DraftViewerPage() {
       }
 
       // ─── CLIN PRICING (both RFQ and RFP) ───────────────
+      // For RFP with Excel pricing sheet: skip detailed CLIN in PDF, add reference note
+      const hasExcelPricing = !isRFQ && data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl;
+
       doc.addPage();
       addPageHeader(solNum, comp.name);
       y = 22;
@@ -868,6 +910,16 @@ export default function DraftViewerPage() {
       doc.setTextColor(30, 30, 30);
       doc.text(clinLabel, margin, y);
       y += 8;
+
+      if (hasExcelPricing) {
+        // RFP with Excel pricing — just add a reference note, no detailed table
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(60, 60, 60);
+        doc.text("Pricing is provided in the attached Excel pricing schedule as required by the solicitation.", margin, y);
+        y += 6;
+        doc.text(`Source: ${data.attachmentAnalysis?.pricingFormatSource || "Solicitation pricing spreadsheet"}`, margin, y);
+      } else {
 
       // Try to parse structured CLIN data for table rendering
       // Use edited content first (user may have edited pricing), fallback to original draft data
@@ -1001,6 +1053,7 @@ export default function DraftViewerPage() {
           y = writeMultiLine(clinText, y, 9);
         }
       }
+      } // end else (no Excel pricing)
 
       // ─── VOLUME IV: REPS & CERTS ───────────────────────────────
       // ─── REPS & CERTS ───────────────────────────────
@@ -1530,6 +1583,24 @@ export default function DraftViewerPage() {
                 ) : (
                   <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">
                     {getContent(currentSection?.key || "")}
+                  </div>
+                )}
+
+                {/* Excel Pricing Download — RFP only, when spreadsheet pricing detected */}
+                {currentSection?.key === "clinData" && currentBidType !== "RFQ" && data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet Detected</p>
+                      <p className="text-[10px] text-blue-600 mt-0.5">Source: {data.attachmentAnalysis.pricingFormatSource || "Solicitation attachment"}</p>
+                    </div>
+                    <button
+                      onClick={handleDownloadPricingExcel}
+                      disabled={excelDownloading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      {excelDownloading ? "Filling..." : "Download Filled Excel"}
+                    </button>
                   </div>
                 )}
               </div>

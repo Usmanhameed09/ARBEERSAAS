@@ -258,6 +258,8 @@ export interface DraftResult {
     sf1449SourceUrl?: string;
     pricingFormatFound: boolean;
     pricingFormatSource?: string;
+    pricingFormatType?: string;
+    pricingFormatUrl?: string;
   };
   error?: string;
 }
