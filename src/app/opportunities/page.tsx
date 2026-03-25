@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, Radar, Archive } from "lucide-react";
+import { Search, Radar, Archive, Trash2 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { NAICS_CODES } from "@/data/opportunities";
 import {
@@ -11,6 +11,8 @@ import {
   loadFetchState,
   saveFetchState,
   loadOpportunitiesFromDB,
+  deleteArchivedOpportunity,
+  clearArchivedOpportunities,
 } from "@/lib/api";
 import type { ScanResult } from "@/lib/api";
 import OpportunityCard from "@/components/OpportunityCard";
@@ -65,6 +67,22 @@ function OpportunitiesContent() {
       setArchivedOpportunities(archived);
     }).catch(() => {});
   }, [userId]);
+
+  // ── Archive Delete Handlers ──
+  const handleDeleteArchived = useCallback(async (noticeId: string) => {
+    try {
+      await deleteArchivedOpportunity(noticeId);
+      setArchivedOpportunities((prev) => prev.filter((o) => o.noticeId !== noticeId));
+    } catch { /* silent */ }
+  }, []);
+
+  const handleClearAllArchived = useCallback(async () => {
+    if (!confirm("Delete all archived opportunities? This cannot be undone.")) return;
+    try {
+      await clearArchivedOpportunities();
+      setArchivedOpportunities([]);
+    } catch { /* silent */ }
+  }, []);
 
   // ── Phase 1: SCAN ──
   const handleScan = useCallback(async (options: FetchOptions) => {
@@ -455,6 +473,16 @@ function OpportunitiesContent() {
         /* ── Archived Tab Content ── */
         filteredArchived.length > 0 ? (
           <>
+            {/* Clear All button */}
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={handleClearAllArchived}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All Archived
+              </button>
+            </div>
             {archivedGo.length > 0 && (
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
@@ -465,7 +493,16 @@ function OpportunitiesContent() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
                   {archivedGo.map((opp) => (
-                    <OpportunityCard key={opp.id} opportunity={opp} onViewDetails={setSelectedOpp} />
+                    <div key={opp.id} className="relative group">
+                      <OpportunityCard opportunity={opp} onViewDetails={setSelectedOpp} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteArchived(opp.noticeId); }}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 border border-red-200 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -480,7 +517,16 @@ function OpportunitiesContent() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
                   {archivedNoGo.map((opp) => (
-                    <OpportunityCard key={opp.id} opportunity={opp} onViewDetails={setSelectedOpp} />
+                    <div key={opp.id} className="relative group">
+                      <OpportunityCard opportunity={opp} onViewDetails={setSelectedOpp} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteArchived(opp.noticeId); }}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 border border-red-200 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>

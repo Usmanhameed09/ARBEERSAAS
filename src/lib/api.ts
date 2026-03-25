@@ -182,6 +182,24 @@ export async function loadOpportunitiesFromDB(
   return resp.json();
 }
 
+/** Delete a single archived opportunity by noticeId */
+export async function deleteArchivedOpportunity(noticeId: string): Promise<{ success: boolean }> {
+  const resp = await fetch(`${API_BASE}/opp-store/delete/${encodeURIComponent(noticeId)}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return resp.json();
+}
+
+/** Delete all archived (non-saved) opportunities */
+export async function clearArchivedOpportunities(): Promise<{ success: boolean; deleted: number }> {
+  const resp = await fetch(`${API_BASE}/opp-store/clear-archived`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return resp.json();
+}
+
 /** Save fetch pagination state (auth token identifies user) */
 export async function saveFetchState(
   _userId: string,
@@ -265,11 +283,11 @@ export interface DraftResult {
 }
 
 /** Generate an RFQ proposal draft via GPT-4o */
-export async function generateDraft(opportunity: Opportunity): Promise<DraftResult> {
+export async function generateDraft(opportunity: Opportunity, selectedPricing?: "low" | "recommended" | "high"): Promise<DraftResult> {
   const resp = await fetch(`${API_BASE}/generate-draft`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ opportunity }),
+    body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
   });
   if (!resp.ok) {
     return { success: false, error: `Request failed: ${resp.status}` };

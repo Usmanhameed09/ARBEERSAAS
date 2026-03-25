@@ -47,6 +47,14 @@ export interface Opportunity {
     email: string;
     phone: string;
   };
+  allPocs?: {
+    type: string;
+    fullName: string;
+    title: string;
+    email: string;
+    phone: string;
+    fax: string;
+  }[];
   attachments: {
     name: string;
     size: string;

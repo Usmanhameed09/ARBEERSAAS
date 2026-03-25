@@ -48,6 +48,7 @@ export default function OpportunityDetailModal({
   const isGo = opportunity.status === "Go";
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [selectedPricing, setSelectedPricing] = useState<"low" | "recommended" | "high">("recommended");
   const bidType = opportunity.bidType;
   const bidTypeStyle = bidType ? BID_TYPE_COLORS[bidType] || BID_TYPE_COLORS["RFP"] : null;
 
@@ -294,20 +295,20 @@ export default function OpportunityDetailModal({
                 </span>
               </div>
 
-              {/* Price Stats Grid */}
+              {/* Price Stats Grid — click to select */}
               <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
-                <div className="bg-white rounded-lg p-2 sm:p-2.5 border border-emerald-100">
-                  <p className="text-[8px] sm:text-[9px] font-semibold text-gray-400 uppercase mb-0.5">Aggressive</p>
-                  <p className="text-xs sm:text-sm font-extrabold text-gray-900">{formatContractValue(opportunity.pricingPrediction.lowBid)}</p>
-                </div>
-                <div className="bg-white rounded-lg p-2 sm:p-2.5 border border-emerald-200 ring-1 ring-emerald-100">
-                  <p className="text-[8px] sm:text-[9px] font-semibold text-emerald-600 uppercase mb-0.5">Recommended</p>
-                  <p className="text-xs sm:text-sm font-extrabold text-emerald-700">{formatContractValue(opportunity.pricingPrediction.predictedBid)}</p>
-                </div>
-                <div className="bg-white rounded-lg p-2 sm:p-2.5 border border-emerald-100">
-                  <p className="text-[8px] sm:text-[9px] font-semibold text-gray-400 uppercase mb-0.5">Safe High</p>
-                  <p className="text-xs sm:text-sm font-extrabold text-gray-900">{formatContractValue(opportunity.pricingPrediction.highBid)}</p>
-                </div>
+                <button onClick={() => setSelectedPricing("low")} className={`bg-white rounded-lg p-2 sm:p-2.5 border text-left transition-all ${selectedPricing === "low" ? "border-emerald-400 ring-2 ring-emerald-200 shadow-sm" : "border-emerald-100 hover:border-emerald-200"}`}>
+                  <p className={`text-[8px] sm:text-[9px] font-semibold uppercase mb-0.5 ${selectedPricing === "low" ? "text-emerald-600" : "text-gray-400"}`}>Aggressive</p>
+                  <p className={`text-xs sm:text-sm font-extrabold ${selectedPricing === "low" ? "text-emerald-700" : "text-gray-900"}`}>{formatContractValue(opportunity.pricingPrediction.lowBid)}</p>
+                </button>
+                <button onClick={() => setSelectedPricing("recommended")} className={`bg-white rounded-lg p-2 sm:p-2.5 border text-left transition-all ${selectedPricing === "recommended" ? "border-emerald-400 ring-2 ring-emerald-200 shadow-sm" : "border-emerald-100 hover:border-emerald-200"}`}>
+                  <p className={`text-[8px] sm:text-[9px] font-semibold uppercase mb-0.5 ${selectedPricing === "recommended" ? "text-emerald-600" : "text-gray-400"}`}>Recommended</p>
+                  <p className={`text-xs sm:text-sm font-extrabold ${selectedPricing === "recommended" ? "text-emerald-700" : "text-gray-900"}`}>{formatContractValue(opportunity.pricingPrediction.predictedBid)}</p>
+                </button>
+                <button onClick={() => setSelectedPricing("high")} className={`bg-white rounded-lg p-2 sm:p-2.5 border text-left transition-all ${selectedPricing === "high" ? "border-emerald-400 ring-2 ring-emerald-200 shadow-sm" : "border-emerald-100 hover:border-emerald-200"}`}>
+                  <p className={`text-[8px] sm:text-[9px] font-semibold uppercase mb-0.5 ${selectedPricing === "high" ? "text-emerald-600" : "text-gray-400"}`}>Safe High</p>
+                  <p className={`text-xs sm:text-sm font-extrabold ${selectedPricing === "high" ? "text-emerald-700" : "text-gray-900"}`}>{formatContractValue(opportunity.pricingPrediction.highBid)}</p>
+                </button>
               </div>
 
               {/* AI Reasoning */}
@@ -355,23 +356,34 @@ export default function OpportunityDetailModal({
             </p>
           </div>
 
-          {/* Point of Contact */}
+          {/* Points of Contact */}
           <div className="mb-4 sm:mb-5">
-            <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-2 sm:mb-3">Point of Contact</h3>
-            <div className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2">
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
-                <User className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400" />
-                {opportunity.pointOfContact.name}
+            <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-2 sm:mb-3">Points of Contact</h3>
+            {(opportunity.allPocs && opportunity.allPocs.length > 0 ? opportunity.allPocs : [
+              { type: "primary", fullName: opportunity.pointOfContact.name, title: "", email: opportunity.pointOfContact.email, phone: opportunity.pointOfContact.phone, fax: "" },
+            ]).map((poc, idx) => (
+              <div key={idx} className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2 mb-2">
+                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${poc.type === "primary" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                  {poc.type || "Primary"}
+                </span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                  <User className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400" />
+                  {poc.fullName}{poc.title ? ` — ${poc.title}` : ""}
+                </div>
+                {poc.email && (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 min-w-0">
+                    <Mail className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400 shrink-0" />
+                    <span className="truncate">{poc.email}</span>
+                  </div>
+                )}
+                {poc.phone && (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                    <Phone className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400" />
+                    {poc.phone}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 min-w-0">
-                <Mail className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400 shrink-0" />
-                <span className="truncate">{opportunity.pointOfContact.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
-                <Phone className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400" />
-                {opportunity.pointOfContact.phone}
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Attachments */}
@@ -436,7 +448,7 @@ export default function OpportunityDetailModal({
               onClick={async () => {
                 setGeneratingDraft(true);
                 try {
-                  const result = await generateDraft(opportunity);
+                  const result = await generateDraft(opportunity, selectedPricing);
                   if (result.success && result.draft) {
                     localStorage.setItem("arber_draft_data", JSON.stringify(result));
                     window.open("/opportunities/draft", "_blank");

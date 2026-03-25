@@ -142,19 +142,22 @@ function TextInput({
   onChange,
   icon,
   type = "text",
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   icon?: ComponentType<{ className?: string }>;
   type?: string;
+  disabled?: boolean;
 }) {
   return (
     <InputShell icon={icon}>
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-xl border border-slate-200 bg-slate-50 ${icon ? "pl-10 pr-4" : "px-4"} py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]`}
+        onChange={(e) => !disabled && onChange(e.target.value)}
+        readOnly={disabled}
+        className={`w-full rounded-xl border border-slate-200 ${disabled ? "bg-slate-100 text-slate-500 cursor-not-allowed" : "bg-slate-50 text-slate-800"} ${icon ? "pl-10 pr-4" : "px-4"} py-3 text-sm font-medium outline-none transition-all focus:border-slate-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]`}
       />
     </InputShell>
   );
@@ -486,6 +489,7 @@ export default function CompanyProfileForm() {
                 onChange={(value) => updateProfile("email", value)}
                 icon={Mail}
                 type="email"
+                disabled
               />
             </div>
             <div>
