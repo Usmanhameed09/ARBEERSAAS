@@ -579,8 +579,8 @@ export default function DraftViewerPage() {
     setExcelDownloading(true);
     try {
       const clinContent = getContent("clinData") || data.draft?.clinData || "";
-      let clinParsed: unknown[] = [];
-      try { clinParsed = JSON.parse(clinContent); } catch { /* text format */ }
+      let clinParsed: unknown = clinContent;
+      try { clinParsed = JSON.parse(clinContent); } catch { /* send as text */ }
 
       const resp = await fetch(`${API_BASE}/draft/fill-pricing-excel`, {
         method: "POST",
@@ -588,6 +588,7 @@ export default function DraftViewerPage() {
         body: JSON.stringify({
           sourceUrl: data.attachmentAnalysis.pricingFormatUrl,
           clinData: clinParsed,
+          clinText: clinContent,
           filename: data.attachmentAnalysis.pricingFormatSource || "Pricing_Schedule.xlsx",
         }),
       });
