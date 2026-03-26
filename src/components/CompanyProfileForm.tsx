@@ -489,7 +489,6 @@ export default function CompanyProfileForm() {
                 onChange={(value) => updateProfile("email", value)}
                 icon={Mail}
                 type="email"
-                disabled
               />
             </div>
             <div>
