@@ -285,6 +285,7 @@ export default function CompanyProfileForm() {
         fullName: profile.contactName,
         jobTitle: profile.jobTitle,
         phone: profile.phone,
+        email: profile.email,
       });
 
       // Save past performance references

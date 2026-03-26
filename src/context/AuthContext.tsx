@@ -274,13 +274,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name: data.fullName,
         job_title: data.jobTitle,
         phone: data.phone,
+        email: data.email,
       }),
     });
 
     if (!resp.ok) throw new Error("Failed to update user");
 
     const updated = await resp.json();
-    const newUser = { ...user!, ...data, fullName: updated.full_name };
+    const newUser = {
+      ...user!,
+      ...data,
+      fullName: updated.full_name,
+      email: updated.email ?? data.email ?? user?.email,
+    };
     setUser(newUser);
     localStorage.setItem("arber_user", JSON.stringify(newUser));
   };
