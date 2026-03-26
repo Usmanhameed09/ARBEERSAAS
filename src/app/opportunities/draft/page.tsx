@@ -333,7 +333,17 @@ export default function DraftViewerPage() {
       let content = fallbacks[s.key] !== undefined ? fallbacks[s.key] : (d[s.key] || "");
       if (s.key === "clinData" && content) {
         const groups = parseClinData(content);
-        if (groups) content = formatClinForDisplay(groups);
+        if (groups) {
+          content = formatClinForDisplay(groups);
+        } else if (content.startsWith("[") || content.startsWith("{")) {
+          // Raw array/JSON that parseClinData couldn't handle — try harder
+          // Replace single quotes, Python booleans, then retry
+          try {
+            const fixed = content.replace(/'/g, '"').replace(/True/g, "true").replace(/False/g, "false").replace(/None/g, "null");
+            const retryGroups = parseClinData(fixed);
+            if (retryGroups) content = formatClinForDisplay(retryGroups);
+          } catch { /* keep as-is */ }
+        }
       }
       initial[s.key] = content;
     });
@@ -1616,66 +1626,83 @@ export default function DraftViewerPage() {
                     className="w-full min-h-[400px] sm:min-h-[500px] p-3 sm:p-4 rounded-lg border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed font-mono resize-y outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
                     spellCheck={false}
                   />
-                ) : currentSection?.key === "clinData" && (() => {
-                  const rawClin = data?.draft?.clinData || data?.draft?.clinPricing || getContent("clinData");
-                  const groups = rawClin ? parseClinData(rawClin) : null;
-                  return groups && groups.length > 0 ? groups : null;
-                })() ? (
-                  // ── Render CLIN as a proper table ──
+                ) : currentSection?.key === "clinData" ? (
+                  // ── CLIN section: ALWAYS try table first, never show raw array ──
                   (() => {
-                    const rawClin = data?.draft?.clinData || data?.draft?.clinPricing || getContent("clinData");
-                    const groups = parseClinData(rawClin || "");
-                    if (!groups) return null;
-                    const grandTotal = groups.reduce((s, g) => s + g.items.reduce((a, i) => a + i.amount, 0), 0);
-                    return (
-                      <div className="space-y-6">
-                        {groups.map((group, gi) => {
-                          const subtotal = group.items.reduce((s, i) => s + i.amount, 0);
-                          return (
-                            <div key={gi}>
-                              <h3 className="text-sm font-bold text-slate-800 mb-2 px-1">{group.period}</h3>
-                              <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                                <table className="w-full text-xs">
-                                  <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200">
-                                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
-                                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Description</th>
-                                      <th className="px-3 py-2 text-center font-semibold text-slate-600">Qty</th>
-                                      <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
-                                      <th className="px-3 py-2 text-right font-semibold text-slate-600">Unit Price</th>
-                                      <th className="px-3 py-2 text-right font-semibold text-slate-600">Amount</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {group.items.map((item, ii) => (
-                                      <tr key={ii} className={ii % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                        <td className="px-3 py-2 font-mono text-slate-700">{item.item}</td>
-                                        <td className="px-3 py-2 text-slate-700 max-w-[300px]">{item.description}</td>
-                                        <td className="px-3 py-2 text-center text-slate-700">{item.qty}</td>
-                                        <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-700">${item.unitPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                        <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">${item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                    // Try every possible source to get parseable CLIN data
+                    const sources = [
+                      data?.draft?.clinData,
+                      data?.draft?.clinPricing,
+                      getContent("clinData"),
+                    ].filter(Boolean);
+
+                    let groups: ClinGroup[] | null = null;
+                    for (const src of sources) {
+                      groups = parseClinData(src || "");
+                      if (groups && groups.length > 0) break;
+                    }
+
+                    if (groups && groups.length > 0) {
+                      const grandTotal = groups.reduce((s, g) => s + g.items.reduce((a, i) => a + i.amount, 0), 0);
+                      return (
+                        <div className="space-y-6">
+                          {groups.map((group, gi) => {
+                            const subtotal = group.items.reduce((s, i) => s + i.amount, 0);
+                            return (
+                              <div key={gi}>
+                                <h3 className="text-sm font-bold text-slate-800 mb-2 px-1">{group.period}</h3>
+                                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
+                                        <th className="px-3 py-2 text-left font-semibold text-slate-600">Description</th>
+                                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Qty</th>
+                                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                                        <th className="px-3 py-2 text-right font-semibold text-slate-600">Unit Price</th>
+                                        <th className="px-3 py-2 text-right font-semibold text-slate-600">Amount</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                  <tfoot>
-                                    <tr className="border-t border-slate-300 bg-slate-50">
-                                      <td colSpan={5} className="px-3 py-2 text-right font-semibold text-slate-600">Subtotal</td>
-                                      <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                    </tr>
-                                  </tfoot>
-                                </table>
+                                    </thead>
+                                    <tbody>
+                                      {group.items.map((item, ii) => (
+                                        <tr key={ii} className={ii % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                          <td className="px-3 py-2 font-mono text-slate-700">{item.item}</td>
+                                          <td className="px-3 py-2 text-slate-700 max-w-[300px]">{item.description}</td>
+                                          <td className="px-3 py-2 text-center text-slate-700">{item.qty}</td>
+                                          <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
+                                          <td className="px-3 py-2 text-right font-mono text-slate-700">${item.unitPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                          <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">${item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="border-t border-slate-300 bg-slate-50">
+                                        <td colSpan={5} className="px-3 py-2 text-right font-semibold text-slate-600">Subtotal</td>
+                                        <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
                               </div>
+                            );
+                          })}
+                          <div className="flex justify-end px-1">
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                              <span className="text-sm font-bold text-amber-800">Grand Total: ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
                             </div>
-                          );
-                        })}
-                        <div className="flex justify-end px-1">
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-                            <span className="text-sm font-bold text-amber-800">Grand Total: ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
-                      </div>
-                    );
+                      );
+                    }
+
+                    // Last resort: show formatted text, NEVER raw array
+                    const displayText = getContent("clinData") || "";
+                    // If it still looks like raw array/JSON, force-format it
+                    if (displayText.startsWith("[") || displayText.startsWith("{")) {
+                      const retryGroups = parseClinData(displayText);
+                      if (retryGroups) return <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">{formatClinForDisplay(retryGroups)}</div>;
+                    }
+                    return <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">{displayText}</div>;
                   })()
                 ) : (
                   <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">
