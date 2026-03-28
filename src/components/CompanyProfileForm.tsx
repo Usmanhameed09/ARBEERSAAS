@@ -515,7 +515,16 @@ export default function CompanyProfileForm() {
             <div className="relative border border-slate-200 rounded-xl p-3 bg-white">
               <img src={signatureUrl} alt="Signature" className="h-16 max-w-[200px] object-contain" />
               <button
-                onClick={() => setSignatureUrl(null)}
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem("arber_token");
+                    await fetch(`${API_BASE}/profile/signature`, {
+                      method: "DELETE",
+                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    });
+                  } catch { /* best-effort */ }
+                  setSignatureUrl(null);
+                }}
                 className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs hover:bg-rose-600"
               >
                 <X className="w-3 h-3" />
