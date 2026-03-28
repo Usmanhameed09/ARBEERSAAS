@@ -29,6 +29,8 @@ import {
   X,
   AlertTriangle,
   Trash2,
+  Users,
+  UserCheck,
 } from "lucide-react";
 import type { DraftResult } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, extractPageLimits } from "@/lib/api";
@@ -47,9 +49,11 @@ const SECTION_DEFS: DraftSection[] = [
   { key: "coverLetter", title: "Cover Letter", icon: <PenTool className="w-3.5 h-3.5" /> },
   { key: "companyProfile", title: "Federal Contracting Profile", icon: <Building2 className="w-3.5 h-3.5" /> },
   { key: "complianceMatrix", title: "Compliance Matrix (Internal)", icon: <CheckCircle2 className="w-3.5 h-3.5" />, volume: "Internal", internalOnly: true },
-  { key: "technicalCapability", title: "Technical Capability", icon: <Settings className="w-3.5 h-3.5" />, volume: "Vol I" },
-  { key: "managementPlan", title: "Management Plan", icon: <Briefcase className="w-3.5 h-3.5" />, volume: "Vol I" },
-  { key: "qualityControlPlan", title: "Quality Control Plan", icon: <ClipboardList className="w-3.5 h-3.5" />, volume: "Vol I" },
+  { key: "technicalCapability", title: "Technical Approach", icon: <Settings className="w-3.5 h-3.5" />, volume: "Vol II" },
+  { key: "managementPlan", title: "Management Plan", icon: <Briefcase className="w-3.5 h-3.5" />, volume: "Vol II" },
+  { key: "qualityControlPlan", title: "Quality Control Plan", icon: <ClipboardList className="w-3.5 h-3.5" />, volume: "Vol II" },
+  { key: "keyPersonnel", title: "Key Personnel", icon: <UserCheck className="w-3.5 h-3.5" />, volume: "Vol II" },
+  { key: "staffingPlan", title: "Staffing Plan", icon: <Users className="w-3.5 h-3.5" />, volume: "Vol II" },
   { key: "pastPerformance", title: "Past Performance", icon: <Award className="w-3.5 h-3.5" />, volume: "Vol II" },
   { key: "clinData", title: "CLIN Pricing", icon: <DollarSign className="w-3.5 h-3.5" />, volume: "Vol III" },
   { key: "repsAndCerts", title: "Reps & Certifications", icon: <Shield className="w-3.5 h-3.5" />, volume: "Vol IV" },
@@ -1369,7 +1373,7 @@ export default function DraftViewerPage() {
 
   // For RFQ: hide technical sections (technicalCapability, managementPlan, qualityControlPlan, pastPerformance)
   const currentBidType = (data?.opportunity?.bidType || "RFQ").toUpperCase();
-  const rfqHiddenSections = ["technicalCapability", "managementPlan", "qualityControlPlan", "pastPerformance"];
+  const rfqHiddenSections = ["technicalCapability", "managementPlan", "qualityControlPlan", "keyPersonnel", "staffingPlan", "pastPerformance"];
   const sections = SECTION_DEFS.filter((s) => {
     if (!getContent(s.key)) return false;
     if (currentBidType === "RFQ" && rfqHiddenSections.includes(s.key)) return false;
