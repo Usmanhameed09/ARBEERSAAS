@@ -249,63 +249,85 @@ export default function CompanyProfileForm() {
     setSaving(true);
     setSaved(false);
     setSaveError(null);
+    const errors: string[] = [];
     try {
       const certsList = profile.certifications
         ? profile.certifications.split(",").map((c) => c.trim()).filter(Boolean)
         : [];
 
-      await saveProfile({
-        companyName: profile.companyName,
-        companyAddress: profile.companyAddress,
-        region: profile.region,
-        website: profile.website,
-        description: profile.description,
-        businessType: profile.businessType,
-        certifications: certsList,
-        uei: profile.uei,
-        cageCode: profile.cageCode,
-        dunsNumber: profile.dunsNumber,
-        clearanceLevel: profile.clearanceLevel,
-        samRegistrationDate: profile.samRegistrationDate,
-        samExpirationDate: profile.samExpirationDate,
-        samStatus: profile.samStatus,
-        bondingCapacity: profile.bondingCapacity,
-        bondingCompany: profile.bondingCompany,
-        generalLiability: profile.generalLiability,
-        workersComp: profile.workersComp,
-        autoLiability: profile.autoLiability,
-        insuranceExpiry: profile.insuranceExpiry,
-        yearsInBusiness: profile.yearsInBusiness,
-        annualRevenue: profile.annualRevenue,
-        employeeCount: profile.employeeCount,
-        naicsCodes: selectedNaics,
-      });
+      // Save company profile
+      try {
+        await saveProfile({
+          companyName: profile.companyName,
+          companyAddress: profile.companyAddress,
+          region: profile.region,
+          website: profile.website,
+          description: profile.description,
+          businessType: profile.businessType,
+          certifications: certsList,
+          uei: profile.uei,
+          cageCode: profile.cageCode,
+          dunsNumber: profile.dunsNumber,
+          clearanceLevel: profile.clearanceLevel,
+          samRegistrationDate: profile.samRegistrationDate,
+          samExpirationDate: profile.samExpirationDate,
+          samStatus: profile.samStatus,
+          bondingCapacity: profile.bondingCapacity,
+          bondingCompany: profile.bondingCompany,
+          generalLiability: profile.generalLiability,
+          workersComp: profile.workersComp,
+          autoLiability: profile.autoLiability,
+          insuranceExpiry: profile.insuranceExpiry,
+          yearsInBusiness: profile.yearsInBusiness,
+          annualRevenue: profile.annualRevenue,
+          employeeCount: profile.employeeCount,
+          naicsCodes: selectedNaics,
+        });
+      } catch (e) {
+        console.error("Failed to save company profile:", e);
+        errors.push("company profile");
+      }
 
-      await saveUser({
-        fullName: profile.contactName,
-        jobTitle: profile.jobTitle,
-        phone: profile.phone,
-        email: profile.email,
-      });
+      // Save user info
+      try {
+        await saveUser({
+          fullName: profile.contactName,
+          jobTitle: profile.jobTitle,
+          phone: profile.phone,
+          email: profile.email,
+        });
+      } catch (e) {
+        console.error("Failed to save user info:", e);
+        errors.push("user info");
+      }
 
-      // Save past performance references
+      // Save past performance references (captured from state before any re-renders)
+      const refsToSave = pastPerformance;
       const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
-      const PP_API = API_BASE;
-      const ppResp = await fetch(`${PP_API}/past-performance`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ references: pastPerformance }),
-      });
-      if (!ppResp.ok) {
-        const errData = await ppResp.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to save past performance references");
+      try {
+        const ppResp = await fetch(`${API_BASE}/past-performance`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ references: refsToSave }),
+        });
+        const ppData = await ppResp.json().catch(() => ({}));
+        if (!ppResp.ok || ppData.success === false) {
+          throw new Error(ppData.error || "Failed to save past performance");
+        }
+      } catch (e) {
+        console.error("Failed to save past performance:", e);
+        errors.push("past performance");
       }
 
       // Refresh profile to get updated data including past performance
       await refreshProfile();
+
+      if (errors.length > 0) {
+        throw new Error(`Failed to save: ${errors.join(", ")}`);
+      }
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
