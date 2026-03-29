@@ -738,7 +738,7 @@ export default function DraftViewerPage() {
       doc.setFontSize(24);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 30, 30);
-      doc.text((comp.name || "Company Name").toUpperCase() + ",  LLC", pageWidth / 2, 60, { align: "center" });
+      doc.text((comp.name || "Company Name").toUpperCase(), pageWidth / 2, 60, { align: "center" });
 
       doc.setFontSize(14);
       doc.setFont("helvetica", "normal");
