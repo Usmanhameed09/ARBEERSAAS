@@ -248,7 +248,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (updates: Partial<CompanyProfile>) => {
     const headers = authHeaders();
-    console.log("[updateProfile] token present:", !!token, "auth header:", !!headers.Authorization);
 
     const resp = await fetch(`${API_BASE}/profile`, {
       method: "PUT",
@@ -258,12 +257,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
-      throw new Error(`Failed to update profile: ${resp.status} ${text}`);
+      console.error("[updateProfile] error:", resp.status, text);
+      throw new Error(`Failed to update profile: ${resp.status}`);
     }
 
-    const updated = await resp.json();
-    setCompanyProfile(updated);
-    localStorage.setItem("arber_profile", JSON.stringify(updated));
+    const updated = await resp.json().catch(() => null);
+    if (updated) {
+      setCompanyProfile(updated);
+      localStorage.setItem("arber_profile", JSON.stringify(updated));
+    }
   };
 
   const updateUser = async (data: Partial<AuthUser>) => {
@@ -278,14 +280,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     });
 
-    if (!resp.ok) throw new Error("Failed to update user");
+    if (!resp.ok) {
+      console.error("[updateUser] error:", resp.status);
+      throw new Error("Failed to update user");
+    }
 
-    const updated = await resp.json();
+    const updated = await resp.json().catch(() => null);
     const newUser = {
       ...user!,
       ...data,
-      fullName: updated.full_name,
-      email: updated.email ?? data.email ?? user?.email,
+      fullName: updated?.full_name ?? data.fullName,
+      email: updated?.email ?? data.email ?? user?.email,
     };
     setUser(newUser);
     localStorage.setItem("arber_user", JSON.stringify(newUser));

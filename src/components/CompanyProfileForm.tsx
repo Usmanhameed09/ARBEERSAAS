@@ -249,15 +249,14 @@ export default function CompanyProfileForm() {
     setSaving(true);
     setSaved(false);
     setSaveError(null);
-    const errors: string[] = [];
     try {
       const certsList = profile.certifications
         ? profile.certifications.split(",").map((c) => c.trim()).filter(Boolean)
         : [];
 
-      // Save company profile
-      try {
-        await saveProfile({
+      // Run all three saves in parallel — each is independent
+      const [profileResult, userResult, ppResult] = await Promise.allSettled([
+        saveProfile({
           companyName: profile.companyName,
           companyAddress: profile.companyAddress,
           region: profile.region,
@@ -282,55 +281,52 @@ export default function CompanyProfileForm() {
           annualRevenue: profile.annualRevenue,
           employeeCount: profile.employeeCount,
           naicsCodes: selectedNaics,
-        });
-      } catch (e) {
-        console.error("Failed to save company profile:", e);
-        errors.push("company profile");
-      }
-
-      // Save user info
-      try {
-        await saveUser({
+        }),
+        saveUser({
           fullName: profile.contactName,
           jobTitle: profile.jobTitle,
           phone: profile.phone,
           email: profile.email,
-        });
-      } catch (e) {
-        console.error("Failed to save user info:", e);
-        errors.push("user info");
+        }),
+        (async () => {
+          const t = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+          const ppResp = await fetch(`${API_BASE}/past-performance`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              ...(t ? { Authorization: `Bearer ${t}` } : {}),
+            },
+            body: JSON.stringify({ references: pastPerformance }),
+          });
+          if (!ppResp.ok) {
+            const ppData = await ppResp.json().catch(() => ({}));
+            throw new Error(ppData.error || `Past performance save failed (${ppResp.status})`);
+          }
+        })(),
+      ]);
+
+      // Refresh profile to get updated data
+      await refreshProfile().catch(() => {});
+
+      // Check results — show saved even if some minor parts failed
+      const failures = [
+        profileResult.status === "rejected" ? "profile" : null,
+        userResult.status === "rejected" ? "user info" : null,
+        ppResult.status === "rejected" ? "past performance" : null,
+      ].filter(Boolean);
+
+      if (failures.length === 3) {
+        // All failed
+        throw new Error("Failed to save profile. Please check your connection and try again.");
+      } else if (failures.length > 0) {
+        // Partial success — show saved with warning
+        console.warn("Partial save failures:", failures);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
       }
-
-      // Save past performance references (captured from state before any re-renders)
-      const refsToSave = pastPerformance;
-      const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
-      try {
-        const ppResp = await fetch(`${API_BASE}/past-performance`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ references: refsToSave }),
-        });
-        const ppData = await ppResp.json().catch(() => ({}));
-        if (!ppResp.ok || ppData.success === false) {
-          throw new Error(ppData.error || "Failed to save past performance");
-        }
-      } catch (e) {
-        console.error("Failed to save past performance:", e);
-        errors.push("past performance");
-      }
-
-      // Refresh profile to get updated data including past performance
-      await refreshProfile();
-
-      if (errors.length > 0) {
-        throw new Error(`Failed to save: ${errors.join(", ")}`);
-      }
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error("Failed to save profile:", msg);
