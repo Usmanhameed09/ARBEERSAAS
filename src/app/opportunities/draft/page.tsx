@@ -313,6 +313,7 @@ export default function DraftViewerPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState<Record<string, { role: string; content: string }[]>>({});
   const [aiPreview, setAiPreview] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Page limits state
   const [pageLimits, setPageLimits] = useState<PageLimit[]>([]);
@@ -545,12 +546,21 @@ export default function DraftViewerPage() {
     if (!aiInstruction.trim() || aiLoading) return;
     setAiLoading(true);
     setAiPreview(null);
+    setAiError(null);
 
     const history = aiHistory[sectionKey] || [];
     try {
+      let sectionContent = getContent(sectionKey);
+      if (sectionKey === "clinData") {
+        const clinGroups = parseClinData(sectionContent);
+        if (clinGroups) {
+          sectionContent = JSON.stringify(clinGroups, null, 2);
+        }
+      }
+
       const result = await rewriteSection({
         sectionKey,
-        sectionContent: getContent(sectionKey),
+        sectionContent,
         instruction: aiInstruction,
         conversationHistory: history,
         opportunityContext: (data?.opportunity || {}) as Record<string, unknown>,
@@ -559,7 +569,16 @@ export default function DraftViewerPage() {
 
       if (result.success && result.rewrittenContent) {
         // Show preview — user can accept or reject
-        setAiPreview(result.rewrittenContent);
+        let previewContent = result.rewrittenContent;
+        if (sectionKey === "clinData") {
+          const clinGroups = parseClinData(result.rewrittenContent || "");
+          if (!clinGroups) {
+            setAiError("AI rewrite returned invalid CLIN pricing data. Try a more specific instruction.");
+            return;
+          }
+          previewContent = formatClinForDisplay(clinGroups);
+        }
+        setAiPreview(previewContent);
         // Update chat history
         setAiHistory((prev) => ({
           ...prev,
@@ -569,9 +588,11 @@ export default function DraftViewerPage() {
             { role: "assistant", content: result.rewrittenContent! },
           ].slice(-8), // Keep last 8 messages (4 turns)
         }));
+      } else {
+        setAiError(result.error || "AI rewrite failed for this section.");
       }
     } catch {
-      // silent
+      setAiError("AI rewrite failed. Please try again.");
     } finally {
       setAiLoading(false);
       setAiInstruction("");
@@ -583,6 +604,7 @@ export default function DraftViewerPage() {
     if (!aiPreview) return;
     updateContent(sectionKey, aiPreview);
     setAiPreview(null);
+    setAiError(null);
     setAiChatOpen(null);
     // Auto-save to backend after AI rewrite is applied
     setTimeout(() => triggerSave(), 500);
@@ -1765,10 +1787,16 @@ export default function DraftViewerPage() {
                       <Sparkles className="w-4 h-4 text-purple-600" />
                       <span className="text-xs font-bold text-purple-800">AI Rewrite — {currentSection?.title}</span>
                     </div>
-                    <button onClick={() => { setAiChatOpen(null); setAiPreview(null); }} className="text-slate-400 hover:text-slate-600">
+                    <button onClick={() => { setAiChatOpen(null); setAiPreview(null); setAiError(null); }} className="text-slate-400 hover:text-slate-600">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
+
+                  {aiError && (
+                    <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                      {aiError}
+                    </div>
+                  )}
 
                   {/* Chat history */}
                   {(aiHistory[currentSection?.key || ""] || []).length > 0 && (
@@ -1816,7 +1844,7 @@ export default function DraftViewerPage() {
                       value={aiInstruction}
                       onChange={(e) => setAiInstruction(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiRewrite(currentSection?.key || ""); } }}
-                      placeholder="e.g. Add more detail about staffing qualifications, make it more concise..."
+                      placeholder={currentSection?.key === "clinData" ? "e.g. Reduce Option Year 1 pricing by 8%, add clearer CLIN descriptions, keep valid pricing structure..." : "e.g. Add more detail about staffing qualifications, make it more concise..."}
                       className="flex-1 px-3 py-2 rounded-lg border border-purple-200 text-xs text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-400/30 focus:border-purple-300"
                       disabled={aiLoading}
                     />
