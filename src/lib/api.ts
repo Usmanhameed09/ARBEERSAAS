@@ -336,6 +336,7 @@ export interface SavedDraft {
   last_modified: string;
   created_at: string;
   version: number;
+  bidType?: string | null;
 }
 
 export interface PageLimit {

@@ -38,6 +38,7 @@ export default function ProposalWorkspacePage() {
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [bidTypeFilter, setBidTypeFilter] = useState<"all" | "RFQ" | "RFP">("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,6 +78,8 @@ export default function ProposalWorkspacePage() {
   };
 
   const filtered = drafts.filter((draft) => {
+    const draftBidType = (draft.bidType || "").toUpperCase();
+    if (bidTypeFilter !== "all" && draftBidType !== bidTypeFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -85,6 +88,9 @@ export default function ProposalWorkspacePage() {
       (draft.notice_id || "").toLowerCase().includes(q)
     );
   });
+
+  const rfqCount = drafts.filter((draft) => (draft.bidType || "").toUpperCase() === "RFQ").length;
+  const rfpCount = drafts.filter((draft) => (draft.bidType || "").toUpperCase() === "RFP").length;
 
   return (
     <div className="p-3 sm:p-5">
@@ -113,7 +119,7 @@ export default function ProposalWorkspacePage() {
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -123,6 +129,29 @@ export default function ProposalWorkspacePage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          {[
+            { key: "all" as const, label: "All", count: drafts.length },
+            { key: "RFQ" as const, label: "RFQ", count: rfqCount },
+            { key: "RFP" as const, label: "RFP", count: rfpCount },
+          ].map((option) => {
+            const active = bidTypeFilter === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setBidTypeFilter(option.key)}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  active
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 border-gray-200 hover:border-gray-300 hover:bg-slate-50"
+                }`}
+              >
+                {option.label} ({option.count})
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -154,6 +183,17 @@ export default function ProposalWorkspacePage() {
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${getStatusStyle(draft.status)}`}>
                         {formatStatus(draft.status)}
                       </span>
+                      {draft.bidType && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          draft.bidType.toUpperCase() === "RFP"
+                            ? "bg-red-100 text-red-700"
+                            : draft.bidType.toUpperCase() === "RFQ"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {draft.bidType.toUpperCase()}
+                        </span>
+                      )}
                       {draft.version && draft.version > 0 && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-600">
                           v{draft.version}
