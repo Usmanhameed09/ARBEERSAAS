@@ -25,6 +25,7 @@ import {
   Cloud,
   CloudOff,
   Sparkles,
+  Search,
   Send,
   X,
   AlertTriangle,
@@ -1370,6 +1371,7 @@ export default function DraftViewerPage() {
 
   const opp = data.opportunity || { title: "", agency: "", noticeId: "", naicsCode: "", dueDate: "", bidType: "" };
   const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [], managerName: "", jobTitle: "" };
+  const encodedNoticeId = opp.noticeId ? encodeURIComponent(opp.noticeId) : "";
 
   // For RFQ: hide technical sections (technicalCapability, managementPlan, qualityControlPlan, pastPerformance)
   const currentBidType = (data?.opportunity?.bidType || "RFQ").toUpperCase();
@@ -1448,6 +1450,28 @@ export default function DraftViewerPage() {
                 {editMode ? <Cloud className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
                 {editMode ? "Save" : "Edit"}
               </button>
+              {opp.noticeId && (
+                <>
+                  <button
+                    onClick={() => window.open(`/opportunities/saved?search=${encodedNoticeId}`, "_blank")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors"
+                    title={`Find solicitation ${opp.noticeId} in saved bids`}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Find in Saved</span>
+                    <span className="sm:hidden">Saved</span>
+                  </button>
+                  <button
+                    onClick={() => window.open(`/opportunities?tab=archived&search=${encodedNoticeId}`, "_blank")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors"
+                    title={`Find solicitation ${opp.noticeId} in archived bids`}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Find in Archived</span>
+                    <span className="sm:hidden">Archived</span>
+                  </button>
+                </>
+              )}
               {draftId && (
                 <button
                   onClick={() => saveAsNewVersion()}

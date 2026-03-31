@@ -26,6 +26,7 @@ import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 function OpportunitiesContent() {
   const { user, companyProfile } = useAuth();
   const { savedIds } = useSavedOpportunities();
+  const searchParams = useSearchParams();
 
   // UI state
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -50,6 +51,15 @@ function OpportunitiesContent() {
 
   const userId = user?.id ?? null;
   const profileNaicsCodes = companyProfile?.naicsCodes || [];
+
+  useEffect(() => {
+    const urlSearch = searchParams.get("search") || "";
+    const urlTab = searchParams.get("tab");
+    setSearchQuery(urlSearch);
+    if (urlTab === "archived") {
+      setActiveTab("archived");
+    }
+  }, [searchParams]);
 
   // Load last fetch time + archived opportunities from DB on mount
   useEffect(() => {
@@ -258,7 +268,12 @@ function OpportunitiesContent() {
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return opp.title.toLowerCase().includes(q) || opp.agency.toLowerCase().includes(q) || opp.naicsCode.includes(searchQuery);
+      return (
+        opp.noticeId.toLowerCase().includes(q) ||
+        opp.title.toLowerCase().includes(q) ||
+        opp.agency.toLowerCase().includes(q) ||
+        opp.naicsCode.toLowerCase().includes(q)
+      );
     }
     return true;
   });
@@ -276,7 +291,12 @@ function OpportunitiesContent() {
     if (savedIds.has(opp.id)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return opp.title.toLowerCase().includes(q) || opp.agency.toLowerCase().includes(q) || opp.naicsCode.includes(searchQuery);
+      return (
+        opp.noticeId.toLowerCase().includes(q) ||
+        opp.title.toLowerCase().includes(q) ||
+        opp.agency.toLowerCase().includes(q) ||
+        opp.naicsCode.toLowerCase().includes(q)
+      );
     }
     return true;
   });
@@ -298,12 +318,12 @@ function OpportunitiesContent() {
             )}
           </p>
         </div>
-        {hasResults && (
+        {(hasResults || archivedOpportunities.length > 0 || !!searchQuery) && (
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by title, agency, NAICS..."
+              placeholder="Search by solicitation #, title, agency..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
@@ -417,7 +437,7 @@ function OpportunitiesContent() {
             })}
 
             {/* Archived Tab */}
-            {filteredArchived.length > 0 && (
+            {archivedOpportunities.length > 0 && (
               <button
                 onClick={() => setActiveTab("archived")}
                 className="shrink-0 group cursor-pointer"
@@ -532,6 +552,14 @@ function OpportunitiesContent() {
               </div>
             )}
           </>
+        ) : archivedOpportunities.length > 0 && searchQuery ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
+            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities match &quot;{searchQuery}&quot;</p>
+            <p className="text-xs text-gray-400">
+              Try the solicitation number, title, or agency.
+            </p>
+          </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
             <Archive className="w-10 h-10 text-gray-300 mx-auto mb-3" />
