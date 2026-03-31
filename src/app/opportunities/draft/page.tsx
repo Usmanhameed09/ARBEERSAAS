@@ -1681,9 +1681,9 @@ export default function DraftViewerPage() {
                   (() => {
                     // Try every possible source to get parseable CLIN data
                     const sources = [
+                      getContent("clinData"),
                       data?.draft?.clinData,
                       data?.draft?.clinPricing,
-                      getContent("clinData"),
                     ].filter(Boolean);
 
                     let groups: ClinGroup[] | null = null;
