@@ -25,7 +25,7 @@ import {
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-import { generateDraft } from "@/lib/api";
+import { downloadOpportunityDocuments, generateDraft } from "@/lib/api";
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -475,32 +475,11 @@ export default function OpportunityDetailModal({
           )}
           <button
             onClick={async () => {
-              const withUrl = opportunity.attachments.filter((a) => a.url);
-              if (withUrl.length === 0) return;
-              if (withUrl.length === 1) {
-                window.open(withUrl[0].url, "_blank");
-                return;
-              }
               try {
-                const JSZip = (await import("jszip")).default;
-                const zip = new JSZip();
-                await Promise.allSettled(
-                  withUrl.map(async (a) => {
-                    const resp = await fetch(a.url!);
-                    if (!resp.ok) return;
-                    const blob = await resp.blob();
-                    zip.file(a.name || `attachment_${withUrl.indexOf(a) + 1}`, blob);
-                  })
-                );
-                const content = await zip.generateAsync({ type: "blob" });
-                const url = URL.createObjectURL(content);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `${opportunity.noticeId}_documents.zip`;
-                link.click();
-                URL.revokeObjectURL(url);
-              } catch {
-                withUrl.forEach((a) => window.open(a.url, "_blank"));
+                await downloadOpportunityDocuments(opportunity);
+              } catch (err) {
+                console.error("Document download failed:", err);
+                alert("Could not download the solicitation documents. Please try again.");
               }
             }}
             disabled={!opportunity.attachments.some((att) => att.url)}
