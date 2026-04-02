@@ -18,7 +18,6 @@ import {
   Mail,
   User,
   ArrowLeft,
-  BookOpen,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
@@ -41,7 +40,6 @@ interface AISummary {
   actionPlan: string;
   contactInfo: string;
   recommendation: string;
-  instructionsToOfferors?: string;
   // Legacy
   requirementsSummary?: string;
   complianceAssessment?: string;
@@ -314,41 +312,6 @@ export default function AISummaryPage() {
                 </div>
               </div>
             )}
-
-            {/* Instructions to Offerors — full-width, prominent compliance section */}
-            <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl border-2 border-amber-300 bg-amber-50 shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-amber-100 border-b border-amber-200">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-200 flex items-center justify-center shrink-0">
-                  <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[12px] sm:text-[13px] font-bold text-amber-900 uppercase tracking-wider">
-                    15. Instructions to Offerors
-                  </h3>
-                  <p className="text-[10px] sm:text-[11px] text-amber-700 mt-0.5">
-                    Submission requirements extracted from Section L — verify the draft follows all rules below
-                  </p>
-                </div>
-                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 border border-amber-300 uppercase tracking-wide">
-                  Compliance Check
-                </span>
-              </div>
-              <div className="px-4 sm:px-5 py-3 sm:py-4">
-                {summary.instructionsToOfferors ? (
-                  <div className="text-[12px] sm:text-[13px] text-slate-700 leading-[1.7] sm:leading-[1.8] whitespace-pre-line">
-                    {summary.instructionsToOfferors}
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2 text-[12px] sm:text-[13px] text-amber-800">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-                    <span>
-                      Instructions to Offerors section not identified in available document content.
-                      Review the full solicitation (Section L or equivalent) directly for page limits, formatting rules, and submission requirements.
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* Sections - two column on desktop, stacks on mobile */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-6 mb-4 sm:mb-6">
