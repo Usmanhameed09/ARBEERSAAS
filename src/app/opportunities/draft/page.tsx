@@ -1669,7 +1669,147 @@ export default function DraftViewerPage() {
 
               {/* Section Content */}
               <div className="px-4 sm:px-6 py-4 sm:py-6">
-                {editMode ? (
+                {editMode && currentSection?.key === "clinData" ? (
+                  // ── CLIN section edit mode: inline editable table ──
+                  (() => {
+                    const sources = [
+                      getContent("clinData"),
+                      data?.draft?.clinData,
+                      data?.draft?.clinPricing,
+                    ].filter(Boolean);
+
+                    let editGroups: ClinGroup[] | null = null;
+                    for (const src of sources) {
+                      editGroups = parseClinData(src || "");
+                      if (editGroups && editGroups.length > 0) break;
+                    }
+
+                    if (!editGroups || editGroups.length === 0) {
+                      // No parseable CLIN data — fall back to textarea
+                      return (
+                        <textarea
+                          value={getContent("clinData")}
+                          onChange={(e) => updateContent("clinData", e.target.value)}
+                          className="w-full min-h-[400px] sm:min-h-[500px] p-3 sm:p-4 rounded-lg border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed font-mono resize-y outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                          spellCheck={false}
+                        />
+                      );
+                    }
+
+                    const updateClinField = (gi: number, ii: number, field: keyof ClinItem, value: string | number) => {
+                      const newGroups = editGroups!.map((g, gIdx) => ({
+                        ...g,
+                        items: g.items.map((item, iIdx) => {
+                          if (gIdx !== gi || iIdx !== ii) return item;
+                          const updated = { ...item, [field]: value };
+                          if (field === "qty" || field === "unitPrice") {
+                            updated.amount = (field === "qty" ? (value as number) : updated.qty) * (field === "unitPrice" ? (value as number) : updated.unitPrice);
+                          }
+                          return updated;
+                        }),
+                      }));
+                      updateContent("clinData", JSON.stringify(newGroups));
+                    };
+
+                    const updatePeriod = (gi: number, value: string) => {
+                      const newGroups = editGroups!.map((g, gIdx) => gIdx === gi ? { ...g, period: value } : g);
+                      updateContent("clinData", JSON.stringify(newGroups));
+                    };
+
+                    const grandTotal = editGroups.reduce((s, g) => s + g.items.reduce((a, i) => a + i.amount, 0), 0);
+
+                    return (
+                      <div className="space-y-6">
+                        <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Editing mode — click any cell to modify values. Amounts auto-calculate from Qty × Unit Price.
+                        </p>
+                        {editGroups.map((group, gi) => {
+                          const subtotal = group.items.reduce((s, i) => s + i.amount, 0);
+                          return (
+                            <div key={gi}>
+                              <input
+                                value={group.period}
+                                onChange={(e) => updatePeriod(gi, e.target.value)}
+                                className="text-sm font-bold text-slate-800 mb-2 px-2 py-1 rounded border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 bg-transparent w-auto"
+                              />
+                              <div className="overflow-x-auto border border-amber-200 rounded-lg">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="bg-amber-50 border-b border-amber-200">
+                                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
+                                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Description</th>
+                                      <th className="px-3 py-2 text-center font-semibold text-slate-600">Qty</th>
+                                      <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                                      <th className="px-3 py-2 text-right font-semibold text-slate-600">Unit Price</th>
+                                      <th className="px-3 py-2 text-right font-semibold text-slate-600">Amount</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.items.map((item, ii) => (
+                                      <tr key={ii} className={ii % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                        <td className="px-2 py-1">
+                                          <input
+                                            value={item.item}
+                                            onChange={(e) => updateClinField(gi, ii, "item", e.target.value)}
+                                            className="w-16 font-mono text-slate-700 border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 rounded px-1 py-0.5 bg-transparent"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1">
+                                          <input
+                                            value={item.description}
+                                            onChange={(e) => updateClinField(gi, ii, "description", e.target.value)}
+                                            className="w-full min-w-[180px] text-slate-700 border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 rounded px-1 py-0.5 bg-transparent"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 text-center">
+                                          <input
+                                            type="number"
+                                            value={item.qty}
+                                            onChange={(e) => updateClinField(gi, ii, "qty", parseFloat(e.target.value) || 0)}
+                                            className="w-14 text-center text-slate-700 border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 rounded px-1 py-0.5 bg-transparent"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 text-center">
+                                          <input
+                                            value={item.unit}
+                                            onChange={(e) => updateClinField(gi, ii, "unit", e.target.value)}
+                                            className="w-16 text-center text-slate-600 border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 rounded px-1 py-0.5 bg-transparent"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 text-right">
+                                          <input
+                                            type="number"
+                                            value={item.unitPrice}
+                                            onChange={(e) => updateClinField(gi, ii, "unitPrice", parseFloat(e.target.value) || 0)}
+                                            className="w-28 text-right font-mono text-slate-700 border border-transparent hover:border-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/30 rounded px-1 py-0.5 bg-transparent"
+                                          />
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">
+                                          ${item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr className="border-t border-slate-300 bg-slate-50">
+                                      <td colSpan={5} className="px-3 py-2 text-right font-semibold text-slate-600">Subtotal</td>
+                                      <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="flex justify-end px-1">
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                            <span className="text-sm font-bold text-amber-800">Grand Total: ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : editMode ? (
                   <textarea
                     value={getContent(currentSection?.key || "")}
                     onChange={(e) => updateContent(currentSection?.key || "", e.target.value)}
