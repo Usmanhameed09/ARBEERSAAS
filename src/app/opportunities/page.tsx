@@ -121,6 +121,18 @@ function OpportunitiesContent() {
       );
       setScanResult(result);
       setTotalOnSam(result.totalOnSam);
+
+      // Update scan time when scan results come in
+      const now = new Date();
+      const timeStr = now.toLocaleString("en-US", {
+        timeZone: "America/Chicago",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }) + " CST";
+      setLastFetchTime(timeStr);
     } catch (err) {
       console.error("Scan failed:", err);
     } finally {

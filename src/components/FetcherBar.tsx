@@ -77,7 +77,7 @@ export default function FetcherBar({
   onScan,
   profileNaicsCodes,
 }: FetcherBarProps) {
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [dateRange, setDateRange] = useState("3months");
   const [selectedNaics, setSelectedNaics] = useState<string[]>([]);
   const [selectedNoticeTypes, setSelectedNoticeTypes] = useState<string[]>(["k", "o", "p"]);
