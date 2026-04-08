@@ -324,6 +324,11 @@ export default function DraftViewerPage() {
 
   // Helper to initialize editedContent from draft data
   const initializeContent = useCallback((draft: Record<string, string>) => {
+    console.log("[initializeContent] called with draft type:", typeof draft, "keys:", draft ? Object.keys(draft) : "null");
+    if (!draft || typeof draft !== "object") {
+      console.error("[initializeContent] draft is not an object!", draft);
+      return;
+    }
     const d = draft;
     const fallbacks: Record<string, string> = {
       clinData: d.clinData || d.clinPricing || "",
@@ -353,6 +358,8 @@ export default function DraftViewerPage() {
       }
       initial[s.key] = content;
     });
+    const nonEmpty = Object.entries(initial).filter(([, v]) => v && v.length > 0);
+    console.log("[initializeContent] Setting editedContent:", nonEmpty.length, "non-empty sections:", nonEmpty.map(([k, v]) => `${k}:${v.length}`));
     setEditedContent(initial);
   }, []);
 
@@ -362,18 +369,23 @@ export default function DraftViewerPage() {
 
     if (urlDraftId) {
       // Load from backend
+      console.log("[DRAFT-LOAD] Loading from backend, draftId:", urlDraftId);
       (async () => {
         try {
           const result = await loadDraft(urlDraftId);
+          console.log("[DRAFT-LOAD] loadDraft result:", result.success, "draft keys:", result.draft ? Object.keys(result.draft) : "NO DRAFT");
           if (result.success && result.draft) {
             setData(result);
             setDraftId(urlDraftId);
             initializeContent(result.draft as unknown as Record<string, string>);
             if (result.pageLimits) setPageLimits(result.pageLimits);
             if (result.formattingRequirements) setFormattingReqs(result.formattingRequirements);
+          } else {
+            console.error("[DRAFT-LOAD] Failed or no draft, falling back to localStorage", result);
+            loadFromLocalStorage();
           }
-        } catch {
-          // Fallback to localStorage
+        } catch (err) {
+          console.error("[DRAFT-LOAD] Error loading draft:", err);
           loadFromLocalStorage();
         }
       })();
