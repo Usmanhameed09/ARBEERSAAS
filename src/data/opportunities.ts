@@ -61,6 +61,11 @@ export interface Opportunity {
     type: string;
     url?: string;
   }[];
+  externalLinks?: {
+    title: string;
+    url: string;
+    type: string;
+  }[];
   isNew?: boolean;
   pricingPrediction?: PricingPrediction;
   incumbent?: IncumbentContractor;

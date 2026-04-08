@@ -21,6 +21,8 @@ import {
   UserCheck,
   Loader2,
   PenTool,
+  ExternalLink,
+  Link2,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
@@ -385,6 +387,37 @@ export default function OpportunityDetailModal({
               </div>
             ))}
           </div>
+
+          {/* External Links (PIEE, etc.) */}
+          {opportunity.externalLinks && opportunity.externalLinks.length > 0 && (
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-2 sm:mb-3">
+                Solicitation Links ({opportunity.externalLinks.length})
+              </h3>
+              <div className="space-y-1.5 sm:space-y-2">
+                {opportunity.externalLinks.map((link, i) => (
+                  <a
+                    key={i}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2.5 sm:p-3 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors group"
+                  >
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center shrink-0">
+                        <Link2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] sm:text-xs font-semibold text-gray-800 truncate">{link.title}</p>
+                        <p className="text-[9px] sm:text-[10px] text-indigo-500">{link.type} Portal — Click to view solicitation documents</p>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Attachments */}
           <div>
