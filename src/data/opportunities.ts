@@ -60,6 +60,8 @@ export interface Opportunity {
     size: string;
     type: string;
     url?: string;
+    source?: string;
+    pieeUrl?: string;
   }[];
   externalLinks?: {
     title: string;
