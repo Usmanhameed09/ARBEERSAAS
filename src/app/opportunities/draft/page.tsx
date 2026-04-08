@@ -384,8 +384,15 @@ export default function DraftViewerPage() {
     function loadFromLocalStorage() {
       try {
         const raw = localStorage.getItem("arber_draft_data");
+        console.log("[DRAFT-DEBUG] raw localStorage length:", raw?.length || 0);
         if (raw) {
           const parsed = JSON.parse(raw);
+          console.log("[DRAFT-DEBUG] parsed.success:", parsed.success);
+          console.log("[DRAFT-DEBUG] parsed.draft keys:", parsed.draft ? Object.keys(parsed.draft) : "NO DRAFT");
+          if (parsed.draft) {
+            const nonEmpty = Object.entries(parsed.draft).filter(([, v]) => v && String(v).length > 10);
+            console.log("[DRAFT-DEBUG] non-empty sections:", nonEmpty.map(([k, v]) => `${k}:${String(v).length}`));
+          }
           setData(parsed);
           if (parsed.draft) {
             initializeContent(parsed.draft);
