@@ -27,7 +27,7 @@ import {
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-import { downloadOpportunityDocuments, generateDraft } from "@/lib/api";
+import { downloadOpportunityDocuments, generateDraft, API_BASE } from "@/lib/api";
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -455,22 +455,15 @@ export default function OpportunityDetailModal({
                       </p>
                     </div>
                   </div>
-                  {att.source === "piee" && att.pieeUrl ? (
+                  {att.url ? (
                     <a
-                      href={att.pieeUrl}
+                      href={att.url.startsWith("/api/") ? API_BASE.replace(/\/api$/, "") + att.url : att.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 sm:p-2 hover:bg-white rounded-lg transition-colors text-amber-400 hover:text-amber-600 shrink-0"
-                      title="Open in PIEE Portal to download"
-                    >
-                      <ExternalLink className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-                    </a>
-                  ) : att.url ? (
-                    <a
-                      href={att.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 sm:p-2 hover:bg-white rounded-lg transition-colors text-gray-400 hover:text-blue-600 shrink-0"
+                      className={`p-1.5 sm:p-2 hover:bg-white rounded-lg transition-colors shrink-0 ${
+                        att.source === "piee" ? "text-amber-400 hover:text-amber-600" : "text-gray-400 hover:text-blue-600"
+                      }`}
+                      title={att.source === "piee" ? "Download from server" : undefined}
                     >
                       <Download className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
                     </a>
