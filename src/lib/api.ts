@@ -311,7 +311,7 @@ export interface DraftResult {
 /** Generate an RFQ proposal draft via GPT-4o */
 export async function generateDraft(opportunity: Opportunity, selectedPricing?: "low" | "recommended" | "high"): Promise<DraftResult> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min timeout
+  const timeout = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min timeout
   try {
     const resp = await fetch(`${API_BASE}/generate-draft`, {
       method: "POST",
@@ -331,7 +331,7 @@ export async function generateDraft(opportunity: Opportunity, selectedPricing?: 
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
-      return { success: false, error: "Request timed out after 10 minutes. Please try again." };
+      return { success: false, error: "Request timed out after 15 minutes. Please try again." };
     }
     console.error("[generateDraft] Fetch error:", err);
     return { success: false, error: `Network error: ${err instanceof Error ? err.message : String(err)}` };
