@@ -310,15 +310,32 @@ export interface DraftResult {
 
 /** Generate an RFQ proposal draft via GPT-4o */
 export async function generateDraft(opportunity: Opportunity, selectedPricing?: "low" | "recommended" | "high"): Promise<DraftResult> {
-  const resp = await fetch(`${API_BASE}/generate-draft`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
-  });
-  if (!resp.ok) {
-    return { success: false, error: `Request failed: ${resp.status}` };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min timeout
+  try {
+    const resp = await fetch(`${API_BASE}/generate-draft`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { success: false, error: `Request failed: ${resp.status} ${text.slice(0, 200)}` };
+    }
+    const data = await resp.json();
+    console.log("[generateDraft] Response keys:", Object.keys(data));
+    console.log("[generateDraft] Draft keys:", data.draft ? Object.keys(data.draft) : "NO DRAFT");
+    return data;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { success: false, error: "Request timed out after 10 minutes. Please try again." };
+    }
+    console.error("[generateDraft] Fetch error:", err);
+    return { success: false, error: `Network error: ${err instanceof Error ? err.message : String(err)}` };
   }
-  return resp.json();
 }
 
 // ============================================================================
