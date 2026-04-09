@@ -27,7 +27,7 @@ import {
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
-import { downloadOpportunityDocuments, generateDraft, API_BASE } from "@/lib/api";
+import { downloadOpportunityDocuments, generateDraftV2, API_BASE } from "@/lib/api";
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -500,7 +500,7 @@ export default function OpportunityDetailModal({
               onClick={async () => {
                 setGeneratingDraft(true);
                 try {
-                  const result = await generateDraft(opportunity, selectedPricing);
+                  const result = await generateDraftV2(opportunity, selectedPricing);
                   if (result.success && result.draft) {
                     localStorage.setItem("arber_draft_data", JSON.stringify(result));
                     window.open("/opportunities/draft", "_blank");

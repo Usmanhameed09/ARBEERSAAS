@@ -308,6 +308,98 @@ export interface DraftResult {
   error?: string;
 }
 
+// ============================================================================
+// V2 DRAFT RESPONSE — provenance + compliance types
+// ============================================================================
+
+export interface ProvenanceSource {
+  type: "document" | "opportunity" | "company_profile" | "past_performance" | "ai_inference" | "industry_standard" | string;
+  name: string;
+  excerpt?: string;
+  detail?: string;
+}
+
+export interface SectionProvenance {
+  section_key: string;
+  section_title: string;
+  sources_used: ProvenanceSource[];
+  section_l_rules_followed: string[];
+  section_l_violations: string[];
+  model_used: string;
+  generation_reasoning: string;
+  token_count: number;
+}
+
+export interface ComplianceViolation {
+  rule: string;
+  section: string;
+  severity: "critical" | "high" | "medium" | "low" | string;
+  detail: string;
+}
+
+export interface ComplianceVerification {
+  overall_pass: boolean;
+  total_rules_checked: number;
+  rules_passed: number;
+  rules_failed: number;
+  violations: ComplianceViolation[];
+  notes: string;
+}
+
+export interface DocAnalysisSummary {
+  name: string;
+  type: string;
+  summary: string;
+  pageCount: number;
+  taskCount: number;
+  clinCount: number;
+  hasSectionL: boolean;
+  hasSectionM: boolean;
+  errors: string[];
+}
+
+export interface DraftResultV2 extends DraftResult {
+  provenance?: Record<string, SectionProvenance>;
+  compliance?: ComplianceVerification | null;
+  docAnalyses?: DocAnalysisSummary[];
+  errors?: string[];
+  pricingExcel?: { base64: string; filename: string; generated: boolean };
+}
+
+/** V2 pipeline: Gemini 2.5 Pro per-document readers + section writers + compliance verifier */
+export async function generateDraftV2(
+  opportunity: Opportunity,
+  selectedPricing?: "low" | "recommended" | "high",
+): Promise<DraftResultV2> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000); // 20 min timeout for v2
+  try {
+    const resp = await fetch(`${API_BASE}/generate-draft-v2`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { success: false, error: `Request failed: ${resp.status} ${text.slice(0, 200)}` };
+    }
+    const data = await resp.json();
+    console.log("[generateDraftV2] Response keys:", Object.keys(data));
+    console.log("[generateDraftV2] Draft keys:", data.draft ? Object.keys(data.draft) : "NO DRAFT");
+    console.log("[generateDraftV2] Provenance sections:", data.provenance ? Object.keys(data.provenance) : "NONE");
+    return data;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { success: false, error: "Request timed out after 20 minutes. Please try again." };
+    }
+    console.error("[generateDraftV2] Fetch error:", err);
+    return { success: false, error: `Network error: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 /** Generate an RFQ proposal draft via GPT-4o */
 export async function generateDraft(opportunity: Opportunity, selectedPricing?: "low" | "recommended" | "high"): Promise<DraftResult> {
   const controller = new AbortController();

@@ -32,8 +32,9 @@ import {
   Trash2,
   Users,
   UserCheck,
+  Info,
 } from "lucide-react";
-import type { DraftResult } from "@/lib/api";
+import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, extractPageLimits } from "@/lib/api";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 
@@ -322,6 +323,13 @@ export default function DraftViewerPage() {
   // Excel pricing state
   const [excelDownloading, setExcelDownloading] = useState(false);
 
+  // Provenance modal state (V2 pipeline) — shows which sources were used to generate a section
+  const [provenanceOpen, setProvenanceOpen] = useState<string | null>(null); // section key or null
+  const provenanceMap: Record<string, SectionProvenance> =
+    (data as unknown as { provenance?: Record<string, SectionProvenance> })?.provenance || {};
+  const complianceReport: ComplianceVerification | null =
+    (data as unknown as { compliance?: ComplianceVerification | null })?.compliance || null;
+
   // Helper to initialize editedContent from draft data
   const initializeContent = useCallback((draft: Record<string, string>) => {
     console.log("[initializeContent] called with draft type:", typeof draft, "keys:", draft ? Object.keys(draft) : "null");
@@ -343,17 +351,17 @@ export default function DraftViewerPage() {
     SECTION_DEFS.forEach((s) => {
       let content = fallbacks[s.key] !== undefined ? fallbacks[s.key] : (d[s.key] || "");
       if (s.key === "clinData" && content) {
-        const groups = parseClinData(content);
-        if (groups) {
-          content = formatClinForDisplay(groups);
-        } else if (content.startsWith("[") || content.startsWith("{")) {
-          // Raw array/JSON that parseClinData couldn't handle — try harder
-          // Replace single quotes, Python booleans, then retry
-          try {
+        try {
+          const groups = parseClinData(content);
+          if (groups) {
+            content = formatClinForDisplay(groups);
+          } else if (content.startsWith("[") || content.startsWith("{")) {
             const fixed = content.replace(/'/g, '"').replace(/True/g, "true").replace(/False/g, "false").replace(/None/g, "null");
             const retryGroups = parseClinData(fixed);
             if (retryGroups) content = formatClinForDisplay(retryGroups);
-          } catch { /* keep as-is */ }
+          }
+        } catch (e) {
+          console.warn("[initializeContent] clinData parsing error, keeping raw:", e);
         }
       }
       initial[s.key] = content;
@@ -1641,6 +1649,16 @@ export default function DraftViewerPage() {
                     }
                     return null;
                   })()}
+                  {/* Provenance info button — shows what sources were used to generate this section */}
+                  {currentSection?.key && provenanceMap[currentSection.key] && (
+                    <button
+                      onClick={() => setProvenanceOpen(currentSection.key)}
+                      className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors border border-slate-200"
+                      title="See what sources were used to generate this section"
+                    >
+                      <Info className="w-3 h-3" /> Sources
+                    </button>
+                  )}
                   {/* AI Rewrite button */}
                   <button
                     onClick={() => setAiChatOpen(aiChatOpen === currentSection?.key ? null : (currentSection?.key || null))}
@@ -2044,6 +2062,180 @@ export default function DraftViewerPage() {
           </div>
         </div>
       </div>
+
+      {/* Provenance Modal — shows what sources were used to generate the current section */}
+      {provenanceOpen && provenanceMap[provenanceOpen] && (() => {
+        const prov = provenanceMap[provenanceOpen];
+        const sourceColor = (type: string) => {
+          switch (type) {
+            case "document": return "bg-blue-50 text-blue-700 border-blue-200";
+            case "opportunity": return "bg-amber-50 text-amber-700 border-amber-200";
+            case "company_profile": return "bg-green-50 text-green-700 border-green-200";
+            case "past_performance": return "bg-purple-50 text-purple-700 border-purple-200";
+            case "ai_inference": return "bg-pink-50 text-pink-700 border-pink-200";
+            case "industry_standard": return "bg-slate-50 text-slate-700 border-slate-200";
+            default: return "bg-slate-50 text-slate-600 border-slate-200";
+          }
+        };
+        const sourceLabel = (type: string) => {
+          switch (type) {
+            case "document": return "Document";
+            case "opportunity": return "Opportunity";
+            case "company_profile": return "Company Profile";
+            case "past_performance": return "Past Performance";
+            case "ai_inference": return "AI Inference";
+            case "industry_standard": return "Industry Standard";
+            default: return type;
+          }
+        };
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setProvenanceOpen(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between bg-gradient-to-r from-blue-50 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">How this section was generated</h3>
+                    <p className="text-xs text-slate-500">{prov.section_title || provenanceOpen}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setProvenanceOpen(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                {/* Model used */}
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Model</div>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-[11px] font-medium text-indigo-700">
+                    <Sparkles className="w-3 h-3" /> {prov.model_used || "gemini-2.5-pro"}
+                  </span>
+                </div>
+
+                {/* Sources used */}
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Sources used ({prov.sources_used?.length || 0})
+                  </div>
+                  {(!prov.sources_used || prov.sources_used.length === 0) ? (
+                    <p className="text-xs text-slate-400 italic">No sources recorded for this section.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {prov.sources_used.map((src: ProvenanceSource, i: number) => (
+                        <div key={i} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${sourceColor(src.type)}`}>
+                              {sourceLabel(src.type)}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-800">{src.name}</span>
+                          </div>
+                          {src.detail && (
+                            <p className="text-[11px] text-slate-600 leading-relaxed mb-1">{src.detail}</p>
+                          )}
+                          {src.excerpt && (
+                            <blockquote className="text-[11px] text-slate-500 italic border-l-2 border-slate-300 pl-2 mt-1.5 line-clamp-3">
+                              &ldquo;{src.excerpt}&rdquo;
+                            </blockquote>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section L rules followed */}
+                {prov.section_l_rules_followed && prov.section_l_rules_followed.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                      Section L rules followed ({prov.section_l_rules_followed.length})
+                    </div>
+                    <ul className="space-y-1">
+                      {prov.section_l_rules_followed.map((rule: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-[11px] text-slate-700">
+                          <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
+                          <span>{rule}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Section L violations */}
+                {prov.section_l_violations && prov.section_l_violations.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-red-600 uppercase tracking-wide mb-2">
+                      Possible violations ({prov.section_l_violations.length})
+                    </div>
+                    <ul className="space-y-1">
+                      {prov.section_l_violations.map((v: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-[11px] text-red-700">
+                          <AlertTriangle className="w-3 h-3 text-red-600 flex-shrink-0 mt-0.5" />
+                          <span>{v}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Generation reasoning */}
+                {prov.generation_reasoning && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Reasoning</div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      {prov.generation_reasoning}
+                    </p>
+                  </div>
+                )}
+
+                {/* Compliance summary (shown on every modal for context) */}
+                {complianceReport && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Overall compliance</div>
+                    <div className={`text-[11px] px-3 py-2 rounded-lg border ${
+                      complianceReport.overall_pass
+                        ? "bg-green-50 border-green-200 text-green-700"
+                        : "bg-amber-50 border-amber-200 text-amber-700"
+                    }`}>
+                      {complianceReport.overall_pass ? (
+                        <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3" /> Passed {complianceReport.rules_passed}/{complianceReport.total_rules_checked} Section L rules</span>
+                      ) : (
+                        <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> {complianceReport.rules_failed} of {complianceReport.total_rules_checked} Section L rules failed</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">
+                  Provenance is recorded by the V2 drafting pipeline for traceability.
+                </span>
+                <button
+                  onClick={() => setProvenanceOpen(null)}
+                  className="px-4 py-1.5 rounded-lg text-xs font-medium text-white bg-slate-800 hover:bg-slate-900 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
