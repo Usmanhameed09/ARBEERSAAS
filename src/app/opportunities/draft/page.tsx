@@ -761,23 +761,193 @@ export default function DraftViewerPage() {
         return y;
       };
 
-      // Helper: write multi-line text preserving \n breaks
+      // Strip inline markdown (bold/italic/code markers) from a line of text
+      const stripInlineMd = (s: string): string => {
+        return s
+          .replace(/\*\*\*(.+?)\*\*\*/g, "$1") // ***bold italic***
+          .replace(/\*\*(.+?)\*\*/g, "$1")     // **bold**
+          .replace(/__(.+?)__/g, "$1")         // __bold__
+          .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1") // *italic* (not **)
+          .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "$1")       // _italic_
+          .replace(/`([^`]+)`/g, "$1")         // `code`
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"); // [text](url) → text
+      };
+
+      // Helper: write markdown-aware multi-line text.
+      // Handles: # headings, **bold**, - bullets, 1. numbered, | tables, blockquotes.
       const writeMultiLine = (text: string, startY: number, fontSize: number = 10): number => {
         let y = startY;
-        const paragraphs = text.split("\n");
-        for (const para of paragraphs) {
-          const trimmed = para.trim();
-          if (!trimmed) { y += 3; continue; }
-          // Detect headings (lines that start with "Factor", "Volume", "1.", "Contract", etc.)
-          const isHeading = /^(VOLUME|Factor|[0-9]+\.[0-9]*\s|Contract\s\d|CPARS|─|═)/.test(trimmed);
-          if (isHeading) {
-            y += 2;
-            y = writeText(trimmed, y, fontSize, "bold", [30, 30, 30]);
-            y += 1;
-          } else {
-            y = writeText(trimmed, y, fontSize, "normal", [40, 40, 40]);
+        const lines = text.split("\n");
+
+        // Collect consecutive table rows so we can render as a real table
+        let tableBuffer: string[] = [];
+        const flushTable = () => {
+          if (tableBuffer.length === 0) return;
+          // Drop markdown separator rows like |---|---|
+          const rows = tableBuffer
+            .filter((r) => !/^\s*\|?[\s:|-]+\|?\s*$/.test(r))
+            .map((r) => r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => stripInlineMd(c.trim())));
+          if (rows.length === 0) { tableBuffer = []; return; }
+
+          const colCount = Math.max(...rows.map((r) => r.length));
+          const colWidth = maxWidth / colCount;
+          const rowHeight = 5;
+
+          // Header row (first row) styled
+          doc.setFontSize(fontSize - 1);
+          for (let ri = 0; ri < rows.length; ri++) {
+            if (y + rowHeight > pageHeight - 20) {
+              doc.addPage();
+              addPageHeader(solNum, comp.name);
+              y = 22;
+            }
+            const row = rows[ri];
+            const isHeader = ri === 0;
+            if (isHeader) {
+              doc.setFillColor(241, 245, 249);
+              doc.rect(margin, y - 3.5, maxWidth, rowHeight + 1, "F");
+              doc.setFont("helvetica", "bold");
+              doc.setTextColor(30, 30, 30);
+            } else {
+              doc.setFont("helvetica", "normal");
+              doc.setTextColor(50, 50, 50);
+            }
+            let tallest = rowHeight;
+            for (let ci = 0; ci < colCount; ci++) {
+              const cell = row[ci] || "";
+              const wrapped = doc.splitTextToSize(cell, colWidth - 2);
+              doc.text(wrapped, margin + ci * colWidth + 1, y);
+              const cellHeight = wrapped.length * (fontSize * 0.48);
+              if (cellHeight > tallest) tallest = cellHeight;
+            }
+            // Row border
+            doc.setDrawColor(220, 220, 220);
+            doc.line(margin, y + tallest - 3, margin + maxWidth, y + tallest - 3);
+            y += tallest + 1;
           }
+          y += 2;
+          tableBuffer = [];
+        };
+
+        for (const rawLine of lines) {
+          const line = rawLine.replace(/\s+$/, "");
+          const trimmed = line.trim();
+
+          // Table row detection (must have a pipe and not be a link)
+          if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.includes("|", 1)) {
+            tableBuffer.push(trimmed);
+            continue;
+          } else if (tableBuffer.length > 0) {
+            flushTable();
+          }
+
+          if (!trimmed) { y += 3; continue; }
+
+          // ATX headings: #, ##, ###
+          const h1 = trimmed.match(/^#\s+(.+)$/);
+          const h2 = trimmed.match(/^##\s+(.+)$/);
+          const h3 = trimmed.match(/^###\s+(.+)$/);
+          if (h1) {
+            y += 3;
+            y = writeText(stripInlineMd(h1[1]), y, fontSize + 3, "bold", [20, 20, 20]);
+            y += 2;
+            continue;
+          }
+          if (h2) {
+            y += 2;
+            y = writeText(stripInlineMd(h2[1]), y, fontSize + 2, "bold", [25, 25, 25]);
+            y += 1;
+            continue;
+          }
+          if (h3) {
+            y += 2;
+            y = writeText(stripInlineMd(h3[1]), y, fontSize + 1, "bold", [30, 30, 30]);
+            y += 1;
+            continue;
+          }
+
+          // Horizontal rule
+          if (/^[-*_]{3,}$/.test(trimmed)) {
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin, y, margin + maxWidth, y);
+            y += 4;
+            continue;
+          }
+
+          // Blockquote
+          if (trimmed.startsWith(">")) {
+            const quoteText = stripInlineMd(trimmed.replace(/^>\s?/, ""));
+            y = writeText(quoteText, y, fontSize, "italic", [90, 90, 90]);
+            continue;
+          }
+
+          // Bullet list: -, *, • at start
+          const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+          if (bulletMatch) {
+            const bulletText = stripInlineMd(bulletMatch[1]);
+            doc.setFontSize(fontSize);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(40, 40, 40);
+            if (y + fontSize * 0.5 > pageHeight - 20) {
+              doc.addPage();
+              addPageHeader(solNum, comp.name);
+              y = 22;
+            }
+            doc.text("•", margin + 2, y);
+            const wrapped = doc.splitTextToSize(bulletText, maxWidth - 8);
+            for (let i = 0; i < wrapped.length; i++) {
+              if (y + fontSize * 0.5 > pageHeight - 20) {
+                doc.addPage();
+                addPageHeader(solNum, comp.name);
+                y = 22;
+              }
+              doc.text(wrapped[i], margin + 6, y);
+              y += fontSize * 0.5;
+            }
+            continue;
+          }
+
+          // Numbered list: 1. 2. etc
+          const numMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+          if (numMatch) {
+            const numText = stripInlineMd(numMatch[2]);
+            const numberLabel = `${numMatch[1]}.`;
+            doc.setFontSize(fontSize);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(40, 40, 40);
+            if (y + fontSize * 0.5 > pageHeight - 20) {
+              doc.addPage();
+              addPageHeader(solNum, comp.name);
+              y = 22;
+            }
+            doc.text(numberLabel, margin + 2, y);
+            const wrapped = doc.splitTextToSize(numText, maxWidth - 10);
+            for (let i = 0; i < wrapped.length; i++) {
+              if (y + fontSize * 0.5 > pageHeight - 20) {
+                doc.addPage();
+                addPageHeader(solNum, comp.name);
+                y = 22;
+              }
+              doc.text(wrapped[i], margin + 8, y);
+              y += fontSize * 0.5;
+            }
+            continue;
+          }
+
+          // Fallback: detect old-style uppercase/Volume headings
+          const isLegacyHeading = /^(VOLUME|Factor|Contract\s\d|CPARS|─|═)/.test(trimmed);
+          if (isLegacyHeading) {
+            y += 2;
+            y = writeText(stripInlineMd(trimmed), y, fontSize, "bold", [30, 30, 30]);
+            y += 1;
+            continue;
+          }
+
+          // Regular paragraph — strip inline markdown and write
+          y = writeText(stripInlineMd(trimmed), y, fontSize, "normal", [40, 40, 40]);
         }
+        // Flush any trailing table
+        flushTable();
         return y;
       };
 
