@@ -37,6 +37,7 @@ import {
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, extractPageLimits } from "@/lib/api";
 import type { PageLimit, FormattingReq } from "@/lib/api";
+import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
 
 interface DraftSection {
   key: string;
@@ -761,6 +762,67 @@ export default function DraftViewerPage() {
         return y;
       };
 
+      // ── Mermaid pre-render pass ──
+      // Scan all section content, render each ```mermaid block to PNG, keyed
+      // by the raw code. writeMultiLine looks them up at paint-time.
+      // Shape: { pngDataUrl, widthPx, heightPx }
+      const mermaidImageCache = new Map<string, { png: string; w: number; h: number } | null>();
+
+      const renderMermaidToPng = async (code: string): Promise<{ png: string; w: number; h: number } | null> => {
+        try {
+          const mermaid = await loadMermaid();
+          const id = `pdf-mmd-${Math.random().toString(36).slice(2, 10)}`;
+          const { svg } = await mermaid.render(id, code);
+
+          // Embed SVG in a hidden DOM node to measure natural size
+          const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+          const svgUrl = URL.createObjectURL(svgBlob);
+
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = svgUrl;
+          });
+          URL.revokeObjectURL(svgUrl);
+          if (!loaded) return null;
+
+          // Render to canvas at 2x for print-quality
+          const scale = 2;
+          const w = Math.max(loaded.naturalWidth || loaded.width || 800, 400);
+          const h = Math.max(loaded.naturalHeight || loaded.height || 400, 200);
+          const canvas = document.createElement("canvas");
+          canvas.width = w * scale;
+          canvas.height = h * scale;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return null;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(loaded, 0, 0, canvas.width, canvas.height);
+          const png = canvas.toDataURL("image/png");
+          return { png, w, h };
+        } catch {
+          return null;
+        }
+      };
+
+      // Collect every mermaid block across every section BEFORE we start drawing
+      const allSectionText = [
+        editedContent,
+        data?.draft || {},
+      ]
+        .map((obj) => (obj && typeof obj === "object" ? Object.values(obj as Record<string, unknown>) : []))
+        .flat()
+        .filter((v): v is string => typeof v === "string")
+        .join("\n");
+      const mermaidBlocks = Array.from(allSectionText.matchAll(/```mermaid\s*\n([\s\S]*?)```/g)).map((m) => m[1].trim());
+      // De-dup
+      const uniqueMermaidBlocks = Array.from(new Set(mermaidBlocks));
+      for (const code of uniqueMermaidBlocks) {
+        mermaidImageCache.set(code, await renderMermaidToPng(code));
+      }
+
       // Strip inline markdown (bold/italic/code markers) from a line of text
       const stripInlineMd = (s: string): string => {
         return s
@@ -776,9 +838,67 @@ export default function DraftViewerPage() {
           .replace(/(?:^|\s)#{1,6}\s+/g, (m) => m.replace(/#+\s+/, "")); // orphan leading ####
       };
 
+      // Helper: embed a pre-rendered mermaid diagram (PNG) at current Y
+      const embedMermaidImage = (code: string, startY: number, fontSize: number = 10): number => {
+        const cached = mermaidImageCache.get(code);
+        if (!cached) return startY; // Nothing to render — silently skip
+        let y = startY + 2;
+        // Scale diagram to fit maxWidth (mm), preserving aspect
+        const pxToMm = 25.4 / 96;
+        const naturalWmm = cached.w * pxToMm;
+        const naturalHmm = cached.h * pxToMm;
+        const scale = Math.min(1, maxWidth / naturalWmm);
+        const drawWmm = naturalWmm * scale;
+        const drawHmm = naturalHmm * scale;
+        // Page-break if image is taller than the remaining space
+        if (y + drawHmm > pageHeight - 20) {
+          doc.addPage();
+          addPageHeader(solNum, comp.name);
+          y = 22;
+        }
+        try {
+          const xOffset = margin + (maxWidth - drawWmm) / 2;
+          doc.addImage(cached.png, "PNG", xOffset, y, drawWmm, drawHmm);
+        } catch {
+          // Fall back to text
+          doc.setFontSize(fontSize - 1);
+          doc.setFont("helvetica", "italic");
+          doc.setTextColor(120, 120, 120);
+          doc.text("[Diagram could not be embedded]", margin, y);
+          return y + 6;
+        }
+        return y + drawHmm + 4;
+      };
+
       // Helper: write markdown-aware multi-line text.
-      // Handles: # headings, **bold**, - bullets, 1. numbered, | tables, blockquotes.
+      // Handles: # headings, **bold**, - bullets, 1. numbered, | tables, blockquotes, ```mermaid diagrams.
       const writeMultiLine = (text: string, startY: number, fontSize: number = 10): number => {
+        // First, extract mermaid blocks and replace with placeholders we'll match line-by-line
+        // A mermaid fence is multi-line, so split the input around fences.
+        const fenceRe = /```mermaid\s*\n([\s\S]*?)```/g;
+        const pieces: Array<{ kind: "text" | "mermaid"; value: string }> = [];
+        let cursor = 0;
+        let fm: RegExpExecArray | null;
+        while ((fm = fenceRe.exec(text)) !== null) {
+          if (fm.index > cursor) pieces.push({ kind: "text", value: text.slice(cursor, fm.index) });
+          pieces.push({ kind: "mermaid", value: fm[1].trim() });
+          cursor = fm.index + fm[0].length;
+        }
+        if (cursor < text.length) pieces.push({ kind: "text", value: text.slice(cursor) });
+
+        let y = startY;
+        for (const piece of pieces) {
+          if (piece.kind === "mermaid") {
+            y = embedMermaidImage(piece.value, y);
+            continue;
+          }
+          y = writeMultiLineText(piece.value, y, fontSize);
+        }
+        return y;
+      };
+
+      // Original line-by-line renderer (text only, no fence handling)
+      const writeMultiLineText = (text: string, startY: number, fontSize: number = 10): number => {
         let y = startY;
         const lines = text.split("\n");
 
@@ -2101,9 +2221,7 @@ export default function DraftViewerPage() {
                     return <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">{displayText}</div>;
                   })()
                 ) : (
-                  <div className="max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono">
-                    {getContent(currentSection?.key || "")}
-                  </div>
+                  <SectionContent content={getContent(currentSection?.key || "")} />
                 )}
 
                 {/* Excel Pricing Download — RFP only, when spreadsheet pricing detected */}
@@ -2177,8 +2295,11 @@ export default function DraftViewerPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="max-h-48 overflow-y-auto text-[11px] text-slate-700 whitespace-pre-wrap font-mono leading-relaxed">
-                        {aiPreview}
+                      <div className="max-h-80 overflow-y-auto text-[11px] text-slate-700 leading-relaxed">
+                        <SectionContent
+                          content={aiPreview}
+                          className="text-[11px] text-slate-700 leading-relaxed"
+                        />
                       </div>
                     </div>
                   )}
