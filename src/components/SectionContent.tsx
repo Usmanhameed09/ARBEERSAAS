@@ -137,20 +137,54 @@ type Segment =
   | { kind: "text"; value: string }
   | { kind: "mermaid"; code: string };
 
+/**
+ * Safety net — strip any leaked LLM-JSON wrapper (e.g. truncated responses
+ * where `{"content":"..."` or `"sources_used":[...]` bled into the saved text).
+ */
+function unwrapLeakedJson(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trimStart();
+  // Case A: full JSON object starts with {"content":"
+  if (/^\{\s*"content"\s*:/i.test(trimmed)) {
+    const m = raw.match(/"content"\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/);
+    if (m) {
+      return m[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\");
+    }
+  }
+  // Case B: content field is fine but appended JSON tail leaked in
+  //         e.g. `...real content...","sources_used":[...`
+  const tailIdx = raw.search(/",\s*"sources_used"\s*:/);
+  if (tailIdx > 0) {
+    return raw
+      .slice(0, tailIdx)
+      .replace(/^\s*\{\s*"content"\s*:\s*"/, "")
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+  }
+  return raw;
+}
+
 function splitContent(content: string): Segment[] {
+  const cleaned = unwrapLeakedJson(content);
   const segments: Segment[] = [];
   const re = /```mermaid\s*\n([\s\S]*?)```/g;
   let lastIdx = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  while ((m = re.exec(cleaned)) !== null) {
     if (m.index > lastIdx) {
-      segments.push({ kind: "text", value: content.slice(lastIdx, m.index) });
+      segments.push({ kind: "text", value: cleaned.slice(lastIdx, m.index) });
     }
     segments.push({ kind: "mermaid", code: m[1].trim() });
     lastIdx = m.index + m[0].length;
   }
-  if (lastIdx < content.length) {
-    segments.push({ kind: "text", value: content.slice(lastIdx) });
+  if (lastIdx < cleaned.length) {
+    segments.push({ kind: "text", value: cleaned.slice(lastIdx) });
   }
   return segments;
 }
@@ -164,6 +198,7 @@ export default function SectionContent({
   content: string;
   className?: string;
 }) {
+  const cleanedContent = unwrapLeakedJson(content || "");
   const segments = splitContent(content || "");
 
   // Fast path — no diagrams. Keep exact original look.
@@ -175,7 +210,7 @@ export default function SectionContent({
           "max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-mono"
         }
       >
-        {content}
+        {cleanedContent}
       </div>
     );
   }
