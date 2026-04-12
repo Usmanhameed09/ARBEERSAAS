@@ -772,9 +772,32 @@ export default function DraftViewerPage() {
         try {
           const mermaid = await loadMermaid();
           const id = `pdf-mmd-${Math.random().toString(36).slice(2, 10)}`;
-          const { svg } = await mermaid.render(id, code);
+          let { svg } = await mermaid.render(id, code);
 
-          // Embed SVG in a hidden DOM node to measure natural size
+          // ── Normalize SVG dimensions for high-res rasterization ──
+          // Mermaid SVGs often lack explicit width/height, or specify tiny ones.
+          // Parse viewBox to get true aspect ratio, then force render at TARGET_W px.
+          const TARGET_W = 1800; // 1800px wide → ~170mm @ 96dpi, sharp on letter paper
+
+          let aspectRatio = 2.0; // sensible default
+          const vb = svg.match(/viewBox=["']([\d\s.\-]+)["']/);
+          if (vb) {
+            const parts = vb[1].trim().split(/\s+/).map(Number);
+            if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+              aspectRatio = parts[2] / parts[3];
+            }
+          }
+
+          const renderW = TARGET_W;
+          const renderH = Math.round(TARGET_W / aspectRatio);
+
+          // Inject/override width & height attributes on the <svg> root so the
+          // browser rasterizes at the exact size we want (otherwise it guesses).
+          svg = svg
+            .replace(/<svg([^>]*)\swidth=["'][^"']*["']/i, "<svg$1")
+            .replace(/<svg([^>]*)\sheight=["'][^"']*["']/i, "<svg$1")
+            .replace(/<svg([^>]*?)>/i, `<svg$1 width="${renderW}" height="${renderH}">`);
+
           const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
           const svgUrl = URL.createObjectURL(svgBlob);
 
@@ -788,20 +811,21 @@ export default function DraftViewerPage() {
           URL.revokeObjectURL(svgUrl);
           if (!loaded) return null;
 
-          // Render to canvas at 2x for print-quality
+          // Draw at 2x device pixels for extra crispness
           const scale = 2;
-          const w = Math.max(loaded.naturalWidth || loaded.width || 800, 400);
-          const h = Math.max(loaded.naturalHeight || loaded.height || 400, 200);
           const canvas = document.createElement("canvas");
-          canvas.width = w * scale;
-          canvas.height = h * scale;
+          canvas.width = renderW * scale;
+          canvas.height = renderH * scale;
           const ctx = canvas.getContext("2d");
           if (!ctx) return null;
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          // High-quality downscale
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
           ctx.drawImage(loaded, 0, 0, canvas.width, canvas.height);
           const png = canvas.toDataURL("image/png");
-          return { png, w, h };
+          return { png, w: renderW, h: renderH };
         } catch {
           return null;
         }
