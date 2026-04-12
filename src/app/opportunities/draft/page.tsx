@@ -770,7 +770,10 @@ export default function DraftViewerPage() {
           .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1") // *italic* (not **)
           .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "$1")       // _italic_
           .replace(/`([^`]+)`/g, "$1")         // `code`
-          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"); // [text](url) → text
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // [text](url) → text
+          // Final sweep — remove any orphan markers that slipped through
+          .replace(/\*{2,}/g, "")              // orphan ** or ***
+          .replace(/(?:^|\s)#{1,6}\s+/g, (m) => m.replace(/#+\s+/, "")); // orphan leading ####
       };
 
       // Helper: write markdown-aware multi-line text.
@@ -843,26 +846,22 @@ export default function DraftViewerPage() {
 
           if (!trimmed) { y += 3; continue; }
 
-          // ATX headings: #, ##, ###
-          const h1 = trimmed.match(/^#\s+(.+)$/);
-          const h2 = trimmed.match(/^##\s+(.+)$/);
-          const h3 = trimmed.match(/^###\s+(.+)$/);
-          if (h1) {
-            y += 3;
-            y = writeText(stripInlineMd(h1[1]), y, fontSize + 3, "bold", [20, 20, 20]);
-            y += 2;
-            continue;
-          }
-          if (h2) {
-            y += 2;
-            y = writeText(stripInlineMd(h2[1]), y, fontSize + 2, "bold", [25, 25, 25]);
-            y += 1;
-            continue;
-          }
-          if (h3) {
-            y += 2;
-            y = writeText(stripInlineMd(h3[1]), y, fontSize + 1, "bold", [30, 30, 30]);
-            y += 1;
+          // ATX headings: # through ###### — check longest first, all levels stripped
+          const hAny = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+          if (hAny) {
+            const level = hAny[1].length;
+            const headingText = stripInlineMd(hAny[2]);
+            // Map level → font bump; levels 4+ get smallest bump but still bold
+            const bumpMap: Record<number, number> = { 1: 3, 2: 2, 3: 1, 4: 0, 5: 0, 6: 0 };
+            const bump = bumpMap[level] ?? 0;
+            const shade: [number, number, number] =
+              level === 1 ? [20, 20, 20] :
+              level === 2 ? [25, 25, 25] :
+              level === 3 ? [30, 30, 30] :
+              [40, 40, 40];
+            y += level <= 2 ? 3 : 2;
+            y = writeText(headingText, y, fontSize + bump, "bold", shade);
+            y += level <= 2 ? 2 : 1;
             continue;
           }
 
@@ -1029,7 +1028,7 @@ export default function DraftViewerPage() {
         const match = profileContent.match(new RegExp(`${label}[:\\s]+(.+)`, "i"));
         return match ? match[1].trim() : "";
       };
-      const profilePoc = extractField("POC Name") || comp.phone || "";
+      const profilePoc = extractField("POC Name") || extractField("Point of Contact") || extractField("Manager") || comp.managerName || "";
       const profilePhone = extractField("Phone") || comp.phone || "";
       const profileEmail = extractField("Email") || comp.email || "";
       const profileTaxId = extractField("Taxpayer ID") || extractField("TAXPAYER ID") || "";
