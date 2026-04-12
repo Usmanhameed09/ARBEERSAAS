@@ -33,9 +33,10 @@ import {
   Users,
   UserCheck,
   Info,
+  Wand2,
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification } from "@/lib/api";
-import { API_BASE, saveDraft, loadDraft, rewriteSection, extractPageLimits } from "@/lib/api";
+import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits } from "@/lib/api";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
 
@@ -316,6 +317,13 @@ export default function DraftViewerPage() {
   const [aiHistory, setAiHistory] = useState<Record<string, { role: string; content: string }[]>>({});
   const [aiPreview, setAiPreview] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Format Review state — formatting-only agent (no content changes)
+  const [formatReviewOpen, setFormatReviewOpen] = useState<string | null>(null);
+  const [formatReviewLoading, setFormatReviewLoading] = useState(false);
+  const [formatReviewPreview, setFormatReviewPreview] = useState<string | null>(null);
+  const [formatReviewChanges, setFormatReviewChanges] = useState<string[]>([]);
+  const [formatReviewError, setFormatReviewError] = useState<string | null>(null);
 
   // Page limits state
   const [pageLimits, setPageLimits] = useState<PageLimit[]>([]);
@@ -638,6 +646,45 @@ export default function DraftViewerPage() {
     setTimeout(() => triggerSave(), 500);
   }, [aiPreview, updateContent, triggerSave]);
 
+  // Format Review handler — formatting-only pass (headings/bullets/spacing)
+  const handleFormatReview = useCallback(async (sectionKey: string) => {
+    if (formatReviewLoading) return;
+    setFormatReviewLoading(true);
+    setFormatReviewPreview(null);
+    setFormatReviewChanges([]);
+    setFormatReviewError(null);
+    setFormatReviewOpen(sectionKey);
+    try {
+      const sectionContent = getContent(sectionKey);
+      if (!sectionContent.trim()) {
+        setFormatReviewError("Section is empty — nothing to review.");
+        return;
+      }
+      const result = await formatReviewSection({ sectionKey, sectionContent });
+      if (result.success && result.reformattedContent) {
+        setFormatReviewPreview(result.reformattedContent);
+        setFormatReviewChanges(result.changesApplied || []);
+      } else {
+        setFormatReviewError(result.error || "Format review failed.");
+      }
+    } catch {
+      setFormatReviewError("Format review failed. Please try again.");
+    } finally {
+      setFormatReviewLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formatReviewLoading, editedContent]);
+
+  const applyFormatReview = useCallback((sectionKey: string) => {
+    if (!formatReviewPreview) return;
+    updateContent(sectionKey, formatReviewPreview);
+    setFormatReviewPreview(null);
+    setFormatReviewChanges([]);
+    setFormatReviewError(null);
+    setFormatReviewOpen(null);
+    setTimeout(() => triggerSave(), 500);
+  }, [formatReviewPreview, updateContent, triggerSave]);
+
   // Page limit helper
   const getPageLimitForSection = (sectionKey: string): number | null => {
     const volumeMap: Record<string, string> = {
@@ -735,7 +782,8 @@ export default function DraftViewerPage() {
         doc.line(margin, 14, pageWidth - margin, 14);
       };
 
-      // Helper: wrap and write text, auto-paginate
+      // Helper: wrap and write text, auto-paginate. Re-applies font state
+      // after every page break because addPageHeader mutates global font state.
       const writeText = (
         text: string,
         startY: number,
@@ -743,9 +791,12 @@ export default function DraftViewerPage() {
         style: string = "normal",
         color: [number, number, number] = [40, 40, 40]
       ): number => {
-        doc.setFontSize(fontSize);
-        doc.setFont("helvetica", style);
-        doc.setTextColor(...color);
+        const applyFont = () => {
+          doc.setFontSize(fontSize);
+          doc.setFont("helvetica", style);
+          doc.setTextColor(...color);
+        };
+        applyFont();
         const lines = doc.splitTextToSize(text, maxWidth);
         const lineHeight = fontSize * 0.5;
         let y = startY;
@@ -755,6 +806,7 @@ export default function DraftViewerPage() {
             doc.addPage();
             addPageHeader(solNum, comp.name);
             y = 22;
+            applyFont(); // ← restore font after header reset
           }
           doc.text(line, margin, y);
           y += lineHeight;
@@ -941,13 +993,14 @@ export default function DraftViewerPage() {
           const rowHeight = 5;
 
           // Header row (first row) styled
-          doc.setFontSize(fontSize - 1);
           for (let ri = 0; ri < rows.length; ri++) {
             if (y + rowHeight > pageHeight - 20) {
               doc.addPage();
               addPageHeader(solNum, comp.name);
               y = 22;
             }
+            // Re-apply table font state on every row (covers post-page-break case)
+            doc.setFontSize(fontSize - 1);
             const row = rows[ri];
             const isHeader = ri === 0;
             if (isHeader) {
@@ -1028,13 +1081,17 @@ export default function DraftViewerPage() {
           const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
           if (bulletMatch) {
             const bulletText = stripInlineMd(bulletMatch[1]);
-            doc.setFontSize(fontSize);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(40, 40, 40);
+            const applyBulletFont = () => {
+              doc.setFontSize(fontSize);
+              doc.setFont("helvetica", "normal");
+              doc.setTextColor(40, 40, 40);
+            };
+            applyBulletFont();
             if (y + fontSize * 0.5 > pageHeight - 20) {
               doc.addPage();
               addPageHeader(solNum, comp.name);
               y = 22;
+              applyBulletFont();
             }
             doc.text("•", margin + 2, y);
             const wrapped = doc.splitTextToSize(bulletText, maxWidth - 8);
@@ -1043,6 +1100,7 @@ export default function DraftViewerPage() {
                 doc.addPage();
                 addPageHeader(solNum, comp.name);
                 y = 22;
+                applyBulletFont();
               }
               doc.text(wrapped[i], margin + 6, y);
               y += fontSize * 0.5;
@@ -1055,13 +1113,17 @@ export default function DraftViewerPage() {
           if (numMatch) {
             const numText = stripInlineMd(numMatch[2]);
             const numberLabel = `${numMatch[1]}.`;
-            doc.setFontSize(fontSize);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(40, 40, 40);
+            const applyNumFont = () => {
+              doc.setFontSize(fontSize);
+              doc.setFont("helvetica", "normal");
+              doc.setTextColor(40, 40, 40);
+            };
+            applyNumFont();
             if (y + fontSize * 0.5 > pageHeight - 20) {
               doc.addPage();
               addPageHeader(solNum, comp.name);
               y = 22;
+              applyNumFont();
             }
             doc.text(numberLabel, margin + 2, y);
             const wrapped = doc.splitTextToSize(numText, maxWidth - 10);
@@ -1070,6 +1132,7 @@ export default function DraftViewerPage() {
                 doc.addPage();
                 addPageHeader(solNum, comp.name);
                 y = 22;
+                applyNumFont();
               }
               doc.text(wrapped[i], margin + 8, y);
               y += fontSize * 0.5;
@@ -1172,7 +1235,24 @@ export default function DraftViewerPage() {
         const match = profileContent.match(new RegExp(`${label}[:\\s]+(.+)`, "i"));
         return match ? match[1].trim() : "";
       };
-      const profilePoc = extractField("POC Name") || extractField("Point of Contact") || extractField("Manager") || comp.managerName || "";
+      // POC Name must be a clean personal name — the LLM sometimes appends a
+      // bio/description ("Arthur Beda, ensures direct senior-level oversight..."),
+      // which overflows the table cell. Strip anything after the first comma/
+      // semicolon/em-dash, and cap at 60 chars as a belt-and-suspenders limit.
+      const sanitizePocName = (raw: string): string => {
+        if (!raw) return "";
+        let v = raw.trim();
+        // Cut at first comma / em-dash / semicolon / hyphen-with-spaces / "is " etc.
+        v = v.split(/[,;]|\s[—–-]\s|\s+\(/)[0].trim();
+        // Kill trailing clause markers
+        v = v.replace(/\s+(?:ensures?|is|serves?|leads?|manages?|oversees?|will|has|was|provides?)\b.*$/i, "").trim();
+        // Hard cap
+        if (v.length > 60) v = v.slice(0, 60).trim();
+        return v;
+      };
+      const profilePoc = sanitizePocName(
+        extractField("POC Name") || extractField("Point of Contact") || extractField("Manager") || comp.managerName || ""
+      );
       const profilePhone = extractField("Phone") || comp.phone || "";
       const profileEmail = extractField("Email") || comp.email || "";
       const profileTaxId = extractField("Taxpayer ID") || extractField("TAXPAYER ID") || "";
@@ -1983,6 +2063,22 @@ export default function DraftViewerPage() {
                   >
                     <Sparkles className="w-3 h-3" /> AI Rewrite
                   </button>
+                  {/* Format Review button — formatting-only (no content changes) */}
+                  <button
+                    onClick={() => handleFormatReview(currentSection?.key || "")}
+                    disabled={formatReviewLoading}
+                    className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border ${
+                      formatReviewOpen === currentSection?.key
+                        ? "text-teal-700 bg-teal-50 border-teal-200"
+                        : "text-teal-600 hover:text-teal-700 hover:bg-teal-50 border-slate-200"
+                    } disabled:opacity-50`}
+                    title="Review and fix formatting (headings, bullets, spacing) — does NOT change content"
+                  >
+                    {formatReviewLoading && formatReviewOpen === currentSection?.key
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Wand2 className="w-3 h-3" />}
+                    Format Review
+                  </button>
                   {editMode ? (
                     <>
                       <span className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200">
@@ -2349,6 +2445,78 @@ export default function DraftViewerPage() {
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-2">Tell the AI what changes you want. It will rewrite the section and show a preview for your approval.</p>
+                </div>
+              )}
+
+              {/* Format Review Drawer — formatting-only preview */}
+              {formatReviewOpen === currentSection?.key && (formatReviewLoading || formatReviewPreview || formatReviewError) && (
+                <div className="px-4 sm:px-6 py-4 border-t border-teal-100 bg-teal-50/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Wand2 className="w-4 h-4 text-teal-600" />
+                      <span className="text-xs font-bold text-teal-800">Format Review — {currentSection?.title}</span>
+                      <span className="text-[10px] text-teal-600/80 italic">(content preserved — formatting only)</span>
+                    </div>
+                    <button
+                      onClick={() => { setFormatReviewOpen(null); setFormatReviewPreview(null); setFormatReviewChanges([]); setFormatReviewError(null); }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {formatReviewLoading && (
+                    <div className="flex items-center gap-2 text-[11px] text-teal-700 px-3 py-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Analyzing formatting (headings, bullets, paragraph structure)…
+                    </div>
+                  )}
+
+                  {formatReviewError && (
+                    <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                      {formatReviewError}
+                    </div>
+                  )}
+
+                  {formatReviewPreview && (
+                    <div className="border border-teal-200 rounded-lg bg-white p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-teal-700 uppercase">Preview — Reformatted</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => applyFormatReview(currentSection?.key || "")}
+                            className="px-3 py-1 rounded-lg text-[11px] font-bold bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                          >
+                            Apply
+                          </button>
+                          <button
+                            onClick={() => { setFormatReviewPreview(null); setFormatReviewChanges([]); }}
+                            className="px-3 py-1 rounded-lg text-[11px] font-medium text-slate-500 hover:text-slate-700 border border-slate-200"
+                          >
+                            Discard
+                          </button>
+                        </div>
+                      </div>
+
+                      {formatReviewChanges.length > 0 && (
+                        <div className="mb-3 rounded-md bg-teal-50 border border-teal-100 px-3 py-2">
+                          <div className="text-[10px] font-bold text-teal-700 uppercase mb-1">Formatting changes applied</div>
+                          <ul className="text-[11px] text-teal-800 space-y-0.5 list-disc pl-4">
+                            {formatReviewChanges.slice(0, 12).map((c, i) => (
+                              <li key={i}>{c}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="max-h-80 overflow-y-auto text-[11px] text-slate-700 leading-relaxed">
+                        <SectionContent
+                          content={formatReviewPreview}
+                          className="text-[11px] text-slate-700 leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

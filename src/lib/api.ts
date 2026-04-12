@@ -517,6 +517,19 @@ export async function rewriteSection(payload: {
   return resp.json();
 }
 
+/** Format Review — formatting-only improvements to a drafted section */
+export async function formatReviewSection(payload: {
+  sectionKey: string;
+  sectionContent: string;
+}): Promise<{ success: boolean; reformattedContent?: string; changesApplied?: string[]; error?: string }> {
+  const resp = await fetch(`${API_BASE}/draft/format-review`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
 /** Extract page limits from solicitation */
 export async function extractPageLimits(payload: {
   description: string;
