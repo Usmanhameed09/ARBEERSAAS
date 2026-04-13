@@ -1233,7 +1233,15 @@ export default function DraftViewerPage() {
       const profileContent = getContent("companyProfile");
       const extractField = (label: string): string => {
         const match = profileContent.match(new RegExp(`${label}[:\\s]+(.+)`, "i"));
-        return match ? match[1].trim() : "";
+        if (!match) return "";
+        // Strip markdown bold/italic markers and any leading decorative chars
+        return match[1]
+          .trim()
+          .replace(/^[*_\s]+/, "")          // leading **, *, _, whitespace
+          .replace(/[*_\s]+$/, "")          // trailing **, *, _, whitespace
+          .replace(/\*\*(.+?)\*\*/g, "$1")  // inline bold **x** → x
+          .replace(/\*(.+?)\*/g, "$1")      // inline italic *x* → x
+          .trim();
       };
       // POC Name must be a clean personal name — the LLM sometimes appends a
       // bio/description ("Arthur Beda, ensures direct senior-level oversight..."),
@@ -1281,7 +1289,16 @@ export default function DraftViewerPage() {
       doc.roundedRect(margin, y, profileTableWidth, totalTableHeight, 2, 2, "S");
       doc.setLineWidth(0.2);
 
-      for (const [label, value] of profileRows) {
+      // Final safety — strip any markdown artifact that slipped past extractField
+      const cleanCell = (v: string) =>
+        (v || "")
+          .replace(/\*\*(.+?)\*\*/g, "$1")
+          .replace(/\*(.+?)\*/g, "$1")
+          .replace(/^[*_\s]+|[*_\s]+$/g, "")
+          .trim();
+
+      for (const [label, rawValue] of profileRows) {
+        const value = cleanCell(rawValue);
         if (!value) continue;
         // Row separator
         if (y > 32) {

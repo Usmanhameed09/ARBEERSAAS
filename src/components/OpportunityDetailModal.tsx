@@ -28,6 +28,8 @@ import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
 import { downloadOpportunityDocuments, generateDraftV2, API_BASE } from "@/lib/api";
+import DraftSectionPickerModal from "./DraftSectionPickerModal";
+import DraftProgressOverlay from "./DraftProgressOverlay";
 
 interface OpportunityDetailModalProps {
   opportunity: Opportunity;
@@ -51,7 +53,30 @@ export default function OpportunityDetailModal({
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [selectedPricing, setSelectedPricing] = useState<"low" | "recommended" | "high">("recommended");
+  const [showSectionPicker, setShowSectionPicker] = useState(false);
   const bidType = opportunity.bidType;
+  const isRFQ = bidType === "RFQ";
+
+  // Unified draft-start handler — used both by the direct button (RFP/other) and
+  // by the RFQ section picker's confirm callback.
+  const runDraftGeneration = async (sectionsOverride?: string[]) => {
+    setShowSectionPicker(false);
+    setGeneratingDraft(true);
+    try {
+      const result = await generateDraftV2(opportunity, selectedPricing, sectionsOverride);
+      if (result.success && result.draft) {
+        localStorage.setItem("arber_draft_data", JSON.stringify(result));
+        window.open("/opportunities/draft", "_blank");
+      } else {
+        alert(result.error || "Failed to generate draft. Please try again.");
+      }
+    } catch {
+      alert("Failed to generate draft. Please try again.");
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
+
   const bidTypeStyle = bidType ? BID_TYPE_COLORS[bidType] || BID_TYPE_COLORS["RFP"] : null;
 
   return (
@@ -497,20 +522,11 @@ export default function OpportunityDetailModal({
           </button>
           {isGo && (
             <button
-              onClick={async () => {
-                setGeneratingDraft(true);
-                try {
-                  const result = await generateDraftV2(opportunity, selectedPricing);
-                  if (result.success && result.draft) {
-                    localStorage.setItem("arber_draft_data", JSON.stringify(result));
-                    window.open("/opportunities/draft", "_blank");
-                  } else {
-                    alert(result.error || "Failed to generate draft. Please try again.");
-                  }
-                } catch {
-                  alert("Failed to generate draft. Please try again.");
-                } finally {
-                  setGeneratingDraft(false);
+              onClick={() => {
+                if (isRFQ) {
+                  setShowSectionPicker(true);   // let user pick RFQ + optional RFP sections
+                } else {
+                  runDraftGeneration();         // RFP / other — default section set
                 }
               }}
               disabled={generatingDraft}
@@ -543,6 +559,17 @@ export default function OpportunityDetailModal({
           </button>
         </div>
       </div>
+
+      {/* RFQ section picker — shown before generation when bidType === RFQ */}
+      {showSectionPicker && (
+        <DraftSectionPickerModal
+          onConfirm={(keys) => runDraftGeneration(keys)}
+          onClose={() => setShowSectionPicker(false)}
+        />
+      )}
+
+      {/* Progress overlay — shown during generation so users see live steps */}
+      {generatingDraft && <DraftProgressOverlay />}
     </div>
   );
 }

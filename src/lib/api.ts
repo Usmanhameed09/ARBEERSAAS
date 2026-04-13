@@ -370,14 +370,22 @@ export interface DraftResultV2 extends DraftResult {
 export async function generateDraftV2(
   opportunity: Opportunity,
   selectedPricing?: "low" | "recommended" | "high",
+  sectionsOverride?: string[],
 ): Promise<DraftResultV2> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000); // 20 min timeout for v2
   try {
+    const body: Record<string, unknown> = {
+      opportunity,
+      selectedPricing: selectedPricing || "recommended",
+    };
+    if (sectionsOverride && sectionsOverride.length > 0) {
+      body.sectionsOverride = sectionsOverride;
+    }
     const resp = await fetch(`${API_BASE}/generate-draft-v2`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     clearTimeout(timeout);
