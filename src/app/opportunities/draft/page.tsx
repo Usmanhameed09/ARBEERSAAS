@@ -63,6 +63,25 @@ const SECTION_DEFS: DraftSection[] = [
   { key: "repsAndCerts", title: "Reps & Certifications", icon: <Shield className="w-3.5 h-3.5" />, volume: "Vol IV" },
 ];
 
+// Normalize SAM.gov-style ALL CAPS "X, DEPARTMENT OF" → "Department of X"
+// (also handles OFFICE OF, AGENCY OF, BUREAU OF, COMMISSION OF). Title-cases
+// the result. If the input is already a proper full name, returns it unchanged.
+function normalizeAgencyName(raw: string | undefined | null): string {
+  const s = (raw || "").trim();
+  if (!s) return "";
+  const titleCase = (str: string) =>
+    str.toLowerCase().replace(/\b([a-z])([a-z']*)/g, (_m, a, b) => a.toUpperCase() + b);
+  // Match "<NAME>, DEPARTMENT OF" / "<NAME>, OFFICE OF" / etc.
+  const m = s.match(/^(.+?),\s*(DEPARTMENT|DEPT|OFFICE|AGENCY|BUREAU|COMMISSION)\s+OF\s*$/i);
+  if (m) {
+    const kindRaw = m[2].toUpperCase() === "DEPT" ? "Department" : titleCase(m[2]);
+    return `${kindRaw} of ${titleCase(m[1].trim())}`;
+  }
+  // Fully UPPERCASE → title-case it
+  if (s === s.toUpperCase() && /[A-Z]/.test(s)) return titleCase(s);
+  return s;
+}
+
 // Strip duplicate headings and scoring notes from GPT content before PDF rendering
 function cleanContentForPdf(text: string): string {
   return text
@@ -1186,22 +1205,33 @@ export default function DraftViewerPage() {
       }
 
       doc.setFontSize(10);
-      doc.text(`Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, pageWidth / 2, titleY + 10, { align: "center" });
+      // Date = proposal due date (NOT today). Falls back to today only if no due date.
+      const proposalDateStr = (() => {
+        const fmt = (d: Date) => d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        if (opp.dueDate) {
+          const d = new Date(opp.dueDate);
+          if (!isNaN(d.getTime())) return fmt(d);
+        }
+        return fmt(new Date());
+      })();
+      doc.text(`Date: ${proposalDateStr}`, pageWidth / 2, titleY + 10, { align: "center" });
 
       // ATTN block at bottom of cover
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       const coverPageContent = getContent("coverPage");
       const attnMatch = coverPageContent.match(/ATTN:[\s\S]*/);
+      const normalizeAttnLine = (line: string) =>
+        line.replace(/^(ATTN:\s*)(.+)$/i, (_m, p, rest) => `${p}${normalizeAgencyName(rest)}`);
       if (attnMatch) {
         let attnY = 180;
         const attnLines = attnMatch[0].split("\n").filter((l: string) => l.trim());
         for (const line of attnLines) {
-          doc.text(line.trim(), margin, attnY);
+          doc.text(normalizeAttnLine(line.trim()), margin, attnY);
           attnY += 5;
         }
       } else {
-        doc.text(`ATTN: ${opp.agency || ""}`, margin, 180);
+        doc.text(`ATTN: ${normalizeAgencyName(opp.agency) || ""}`, margin, 180);
       }
 
       // ─── PAGE 2: COVER LETTER ─────────────────────────────────
@@ -1974,7 +2004,7 @@ export default function DraftViewerPage() {
 
           {/* Opportunity meta */}
           <div className="flex flex-wrap gap-3 sm:gap-4 mt-3 sm:mt-4 text-[10px] sm:text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
-            <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {opp.agency}</span>
+            <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {normalizeAgencyName(opp.agency)}</span>
             <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> NAICS: {opp.naicsCode}</span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" /> Due: {(() => { try { return new Date(opp.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); } catch { return opp.dueDate; } })()}
