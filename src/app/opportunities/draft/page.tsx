@@ -1222,11 +1222,23 @@ export default function DraftViewerPage() {
       };
       if (attnMatch) {
         let attnY = 180;
-        const attnLines = attnMatch[0]
-          .split("\n")
-          .map(normalizeAttnLine)
-          .filter((l: string) => l.trim() && l.trim() !== "ATTN:");
-        for (const line of attnLines) {
+        // Stop slurping at the first non-address line. The LLM's coverPage
+        // section often continues with "Solicitation Number:", "SUBMITTED BY:",
+        // "UEI:", "CAGE:", "NAICS:", "Point of Contact:" etc. — all duplicates
+        // of info already rendered by the proper cover header + profile table.
+        const STOP_RE = /^(solicitation\s+(number|no)|proposal\s+(due|response)|submitted\s+by|uei|cage|naics|duns|point\s+of\s+contact|poc|company\s+name|address|phone|email|date|taxpayer|business\s+type|psc|---+|##+\s)/i;
+        const rawLines = attnMatch[0].split("\n");
+        const collected: string[] = [];
+        let blanks = 0;
+        for (const raw of rawLines) {
+          const t = raw.trim();
+          if (!t) { blanks++; if (blanks >= 1 && collected.length > 0) break; else continue; }
+          if (collected.length > 0 && STOP_RE.test(t)) break;
+          const line = normalizeAttnLine(raw);
+          if (line && line !== "ATTN:") collected.push(line);
+          if (collected.length >= 6) break; // belt-and-suspenders cap
+        }
+        for (const line of collected) {
           doc.text(line, margin, attnY);
           attnY += 5;
         }
