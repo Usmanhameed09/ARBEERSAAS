@@ -24,6 +24,7 @@ interface AISummary {
   opportunityMapping: string;
   actionPlan: string;
   contactInfo: string;
+  instructionsToOfferors: string;
   recommendation: string;
   // Legacy fields for backward compatibility
   requirementsSummary?: string;
@@ -250,7 +251,8 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
     { num: "11", title: "OPPORTUNITY MAPPING", content: summary.opportunityMapping || "", color: [24, 100, 100] },
     { num: "12", title: "ACTION PLAN", content: summary.actionPlan || "", color: [24, 36, 52] },
     { num: "13", title: "CONTACT INFORMATION", content: summary.contactInfo, color: [100, 100, 100] },
-    { num: "14", title: "RECOMMENDATION", content: summary.recommendation, color: [24, 36, 52] },
+    { num: "14", title: "INSTRUCTIONS TO OFFERORS (SECTION L)", content: summary.instructionsToOfferors || "", color: [70, 60, 160] },
+    { num: "15", title: "RECOMMENDATION", content: summary.recommendation, color: [24, 36, 52] },
   ];
 
   for (const section of sections) {

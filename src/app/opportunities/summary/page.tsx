@@ -18,6 +18,7 @@ import {
   Mail,
   User,
   ArrowLeft,
+  ClipboardList,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { generateSummaryPdf } from "@/lib/generateSummaryPdf";
@@ -39,6 +40,7 @@ interface AISummary {
   opportunityMapping: string;
   actionPlan: string;
   contactInfo: string;
+  instructionsToOfferors: string;
   recommendation: string;
   // Legacy
   requirementsSummary?: string;
@@ -408,6 +410,13 @@ export default function AISummaryPage() {
                   summary.contactInfo,
                   "bg-white",
                   "bg-blue-50"
+                )}
+                {summary.instructionsToOfferors && renderSection(
+                  <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />,
+                  "14. Instructions to Offerors (Section L)",
+                  summary.instructionsToOfferors,
+                  "bg-white",
+                  "bg-indigo-50"
                 )}
               </div>
             </div>
