@@ -1208,18 +1208,26 @@ export default function DraftViewerPage() {
       doc.setFontSize(10);
       doc.text(`Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, pageWidth / 2, titleY + 10, { align: "center" });
 
-      // ATTN block at bottom of cover
+      // ATTN block at bottom of cover — strip markdown (LLM emits **bold**) and normalize agency
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       const coverPageContent = getContent("coverPage");
       const attnMatch = coverPageContent.match(/ATTN:[\s\S]*/);
-      const normalizeAttnLine = (line: string) =>
-        line.replace(/^(ATTN:\s*)(.+)$/i, (_m, p, rest) => `${p}${normalizeAgencyName(rest)}`);
+      const normalizeAttnLine = (line: string) => {
+        const cleaned = stripInlineMd(line)
+          .replace(/^#+\s*/, "")
+          .replace(/^---+$/, "")
+          .trim();
+        return cleaned.replace(/^(ATTN:\s*)(.*)$/i, (_m, p, rest) => `${p}${normalizeAgencyName(rest)}`);
+      };
       if (attnMatch) {
         let attnY = 180;
-        const attnLines = attnMatch[0].split("\n").filter((l: string) => l.trim());
+        const attnLines = attnMatch[0]
+          .split("\n")
+          .map(normalizeAttnLine)
+          .filter((l: string) => l.trim() && l.trim() !== "ATTN:");
         for (const line of attnLines) {
-          doc.text(normalizeAttnLine(line.trim()), margin, attnY);
+          doc.text(line, margin, attnY);
           attnY += 5;
         }
       } else {
