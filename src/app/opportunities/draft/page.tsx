@@ -1392,8 +1392,11 @@ export default function DraftViewerPage() {
       }
 
       // ─── CLIN PRICING (both RFQ and RFP) ───────────────
-      // For RFP with Excel pricing sheet: skip detailed CLIN in PDF, add reference note
-      const hasExcelPricing = !isRFQ && data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl;
+      // When the solicitation provides its own Excel pricing sheet, skip the
+      // inline CLIN table in the PDF and just add a reference note — the user
+      // downloads the auto-filled spreadsheet via the "Download Filled Excel"
+      // button on the Pricing section. Applies to BOTH RFQ and RFP.
+      const hasExcelPricing = data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl;
 
       doc.addPage();
       addPageHeader(solNum, comp.name);
@@ -2361,8 +2364,8 @@ export default function DraftViewerPage() {
                   <SectionContent content={getContent(currentSection?.key || "")} />
                 )}
 
-                {/* Excel Pricing Download — RFP only, when spreadsheet pricing detected */}
-                {currentSection?.key === "clinData" && currentBidType !== "RFQ" && data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl && (
+                {/* Excel Pricing Download — RFQ + RFP, when a pricing spreadsheet is attached */}
+                {currentSection?.key === "clinData" && data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet Detected</p>
