@@ -71,11 +71,12 @@ function normalizeAgencyName(raw: string | undefined | null): string {
   if (!s) return "";
   const titleCase = (str: string) =>
     str.toLowerCase().replace(/\b([a-z])([a-z']*)/g, (_m, a, b) => a.toUpperCase() + b);
-  // Match "<NAME>, DEPARTMENT OF" / "<NAME>, OFFICE OF" / etc.
-  const m = s.match(/^(.+?),\s*(DEPARTMENT|DEPT|OFFICE|AGENCY|BUREAU|COMMISSION)\s+OF\s*$/i);
+  // Match "<NAME>, DEPARTMENT OF" / "<NAME> DEPT OF" / "<NAME>, OFFICE OF" / etc.
+  // Comma is optional — SAM and LLM both produce variants.
+  const m = s.match(/^(.+?)[,\s]+(DEPARTMENT|DEPT\.?|OFFICE|AGENCY|BUREAU|COMMISSION)\s+OF\.?\s*$/i);
   if (m) {
-    const kindRaw = m[2].toUpperCase() === "DEPT" ? "Department" : titleCase(m[2]);
-    return `${kindRaw} of ${titleCase(m[1].trim())}`;
+    const kindNorm = m[2].toUpperCase().replace(/\./g, "").startsWith("DEPT") ? "Department" : titleCase(m[2].replace(/\./g, ""));
+    return `${kindNorm} of ${titleCase(m[1].trim().replace(/,$/, ""))}`;
   }
   // Fully UPPERCASE → title-case it
   if (s === s.toUpperCase() && /[A-Z]/.test(s)) return titleCase(s);
@@ -1205,16 +1206,7 @@ export default function DraftViewerPage() {
       }
 
       doc.setFontSize(10);
-      // Date = proposal due date (NOT today). Falls back to today only if no due date.
-      const proposalDateStr = (() => {
-        const fmt = (d: Date) => d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        if (opp.dueDate) {
-          const d = new Date(opp.dueDate);
-          if (!isNaN(d.getTime())) return fmt(d);
-        }
-        return fmt(new Date());
-      })();
-      doc.text(`Date: ${proposalDateStr}`, pageWidth / 2, titleY + 10, { align: "center" });
+      doc.text(`Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, pageWidth / 2, titleY + 10, { align: "center" });
 
       // ATTN block at bottom of cover
       doc.setFontSize(10);
