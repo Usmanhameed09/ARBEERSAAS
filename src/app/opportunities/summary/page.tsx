@@ -67,6 +67,24 @@ export default function AISummaryPage() {
       const opp = JSON.parse(raw) as Opportunity;
       setOpportunity(opp);
 
+      // Cache AI summary per notice ID so reopening the page shows the same
+      // summary immediately instead of re-running the expensive backend call.
+      const cacheKey = `arber_ai_summary_${opp.noticeId || opp.id || "unknown"}`;
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.summary) {
+            setSummary(cached.summary);
+            setOppData(cached.opportunity || null);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // ignore cache errors, fall through to fetch
+      }
+
       (async () => {
         try {
           const token = localStorage.getItem("arber_token");
@@ -89,6 +107,15 @@ export default function AISummaryPage() {
 
           setSummary(data.summary);
           setOppData(data.opportunity);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({
+              summary: data.summary,
+              opportunity: data.opportunity,
+              cachedAt: Date.now(),
+            }));
+          } catch {
+            // storage full / private mode — non-fatal
+          }
         } catch (err) {
           if (err instanceof DOMException && err.name === "AbortError") {
             setError("Request timed out. The backend may be unavailable — please try again.");

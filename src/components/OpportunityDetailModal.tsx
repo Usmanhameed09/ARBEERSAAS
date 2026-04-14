@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Calendar,
@@ -56,6 +56,19 @@ export default function OpportunityDetailModal({
   const [showSectionPicker, setShowSectionPicker] = useState(false);
   const bidType = opportunity.bidType;
   const isRFQ = bidType === "RFQ";
+
+  // Has the AI summary already been generated for this opportunity? If so,
+  // the button label changes from "Generate" to "View" so the user knows a
+  // click re-opens the cached summary (no repeat backend call).
+  const [summaryCached, setSummaryCached] = useState(false);
+  useEffect(() => {
+    try {
+      const key = `arber_ai_summary_${opportunity.noticeId || opportunity.id || "unknown"}`;
+      setSummaryCached(Boolean(localStorage.getItem(key)));
+    } catch {
+      setSummaryCached(false);
+    }
+  }, [opportunity.noticeId, opportunity.id]);
 
   // Unified draft-start handler — used both by the direct button (RFP/other) and
   // by the RFQ section picker's confirm callback.
@@ -517,8 +530,8 @@ export default function OpportunityDetailModal({
             ) : (
               <Sparkles className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
             )}
-            <span className="hidden sm:inline">{generatingPdf ? "Generating PDF..." : "Generate AI Summary Report"}</span>
-            <span className="sm:hidden">{generatingPdf ? "Generating..." : "AI Summary"}</span>
+            <span className="hidden sm:inline">{generatingPdf ? "Generating PDF..." : (summaryCached ? "View AI Summary Report" : "Generate AI Summary Report")}</span>
+            <span className="sm:hidden">{generatingPdf ? "Generating..." : (summaryCached ? "View Summary" : "AI Summary")}</span>
           </button>
           {isGo && (
             <button

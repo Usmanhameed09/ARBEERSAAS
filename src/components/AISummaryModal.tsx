@@ -64,8 +64,26 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
   const [error, setError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  // Fetch summary on mount
+  // Fetch summary on mount — but reuse the localStorage cache (keyed by
+  // notice ID) so reopening the modal is instant and does not re-run the
+  // expensive backend call.
   useEffect(() => {
+    const cacheKey = `arber_ai_summary_${opportunity.noticeId || opportunity.id || "unknown"}`;
+    try {
+      const cachedRaw = typeof window !== "undefined" ? localStorage.getItem(cacheKey) : null;
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw);
+        if (cached?.summary) {
+          setSummary(cached.summary);
+          setOppData(cached.opportunity || null);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // fall through to fetch
+    }
+
     (async () => {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
@@ -88,6 +106,15 @@ export default function AISummaryModal({ opportunity, onClose }: AISummaryModalP
 
         setSummary(data.summary);
         setOppData(data.opportunity);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            summary: data.summary,
+            opportunity: data.opportunity,
+            cachedAt: Date.now(),
+          }));
+        } catch {
+          // storage full / private mode — non-fatal
+        }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           setError("Request timed out. The backend may be unavailable.");

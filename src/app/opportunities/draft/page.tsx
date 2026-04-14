@@ -1365,72 +1365,75 @@ export default function DraftViewerPage() {
       const tocEntries: { title: string; page: number; indent?: boolean }[] = [];
       tocEntries.push({ title: `${comp.name}, Federal Contracting Profile`, page: doc.getNumberOfPages() + 1 });
 
-      // ─── VOLUME I: TECHNICAL CAPABILITY (RFP only) ──────────────────────
+      // ─── VOLUME I: TECHNICAL CAPABILITY ──────────────────────
+      // Included for RFPs always, and for RFQs when the user opted in via the
+      // section picker (backend only writes these sections when drafted_sections
+      // contains them, so content presence is the reliable gate).
       const techContent = cleanContentForPdf(getContent("technicalCapability"));
-      if (!isRFQ && techContent) {
+      if (techContent) {
         doc.addPage();
         addPageHeader(solNum, comp.name);
         y = 22;
-        tocEntries.push({ title: "Volume I — Technical Proposal", page: doc.getNumberOfPages() });
+        tocEntries.push({ title: isRFQ ? "Technical Approach" : "Volume I — Technical Proposal", page: doc.getNumberOfPages() });
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(30, 30, 30);
-        doc.text("Volume I — Technical Proposal", margin, y);
+        doc.text(isRFQ ? "Technical Approach" : "Volume I — Technical Proposal", margin, y);
         y += 10;
         y = writeMultiLine(techContent, y, 10);
+      }
 
-        // ─── MANAGEMENT PLAN (RFP only) ──────────────────────────────────────
-        const mgmtContent = cleanContentForPdf(getContent("managementPlan"));
-        if (mgmtContent) {
-          if (y + 30 > pageHeight - 20) {
-            doc.addPage();
-            addPageHeader(solNum, comp.name);
-            y = 22;
-          } else {
-            y += 6;
-          }
-          tocEntries.push({ title: "Factor 2: Management Plan", page: doc.getNumberOfPages(), indent: true });
-          doc.setFontSize(12);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 30, 30);
-          doc.text("Factor 2 — Management Plan", margin, y);
-          y += 10;
-          y = writeMultiLine(mgmtContent, y, 10);
-        }
-
-        // ─── QUALITY CONTROL PLAN (RFP only) ──────────────────────────────────
-        const qcContent = cleanContentForPdf(getContent("qualityControlPlan"));
-        if (qcContent) {
-          if (y + 30 > pageHeight - 20) {
-            doc.addPage();
-            addPageHeader(solNum, comp.name);
-            y = 22;
-          } else {
-            y += 6;
-          }
-          tocEntries.push({ title: "Factor 3: Quality Control Plan", page: doc.getNumberOfPages(), indent: true });
-          doc.setFontSize(12);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 30, 30);
-          doc.text("Factor 3 — Quality Control Plan", margin, y);
-          y += 10;
-          y = writeMultiLine(qcContent, y, 10);
-        }
-
-        // ─── VOLUME II: PAST PERFORMANCE (RFP only) ───────────────────────────
-        const ppContent = cleanContentForPdf(getContent("pastPerformance"));
-        if (ppContent) {
+      // ─── MANAGEMENT PLAN ───────────────────────────────────────
+      const mgmtContent = cleanContentForPdf(getContent("managementPlan"));
+      if (mgmtContent) {
+        if (!techContent || y + 30 > pageHeight - 20) {
           doc.addPage();
           addPageHeader(solNum, comp.name);
           y = 22;
-          tocEntries.push({ title: "Volume II — Past Performance", page: doc.getNumberOfPages() });
-          doc.setFontSize(12);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 30, 30);
-          doc.text("Volume II — Past Performance", margin, y);
-          y += 10;
-          y = writeMultiLine(ppContent, y, 10);
+        } else {
+          y += 6;
         }
+        tocEntries.push({ title: isRFQ ? "Management Plan" : "Factor 2: Management Plan", page: doc.getNumberOfPages(), indent: !isRFQ });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(isRFQ ? "Management Plan" : "Factor 2 — Management Plan", margin, y);
+        y += 10;
+        y = writeMultiLine(mgmtContent, y, 10);
+      }
+
+      // ─── QUALITY CONTROL PLAN ──────────────────────────────────
+      const qcContent = cleanContentForPdf(getContent("qualityControlPlan"));
+      if (qcContent) {
+        if (!techContent && !mgmtContent || y + 30 > pageHeight - 20) {
+          doc.addPage();
+          addPageHeader(solNum, comp.name);
+          y = 22;
+        } else {
+          y += 6;
+        }
+        tocEntries.push({ title: isRFQ ? "Quality Control Plan" : "Factor 3: Quality Control Plan", page: doc.getNumberOfPages(), indent: !isRFQ });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(isRFQ ? "Quality Control Plan" : "Factor 3 — Quality Control Plan", margin, y);
+        y += 10;
+        y = writeMultiLine(qcContent, y, 10);
+      }
+
+      // ─── PAST PERFORMANCE ──────────────────────────────────────
+      const ppContent = cleanContentForPdf(getContent("pastPerformance"));
+      if (ppContent) {
+        doc.addPage();
+        addPageHeader(solNum, comp.name);
+        y = 22;
+        tocEntries.push({ title: isRFQ ? "Past Performance" : "Volume II — Past Performance", page: doc.getNumberOfPages() });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(isRFQ ? "Past Performance" : "Volume II — Past Performance", margin, y);
+        y += 10;
+        y = writeMultiLine(ppContent, y, 10);
       }
 
       // ─── CLIN PRICING (both RFQ and RFP) ───────────────
@@ -1877,14 +1880,10 @@ export default function DraftViewerPage() {
   const comp = data.company || { name: "", uei: "", cageCode: "", address: "", samStatus: "", businessType: "", naicsCode: "", website: "", phone: "", email: "", annualRevenue: "", employeeCount: "", certifications: [], managerName: "", jobTitle: "" };
   const encodedNoticeId = opp.noticeId ? encodeURIComponent(opp.noticeId) : "";
 
-  // For RFQ: hide technical sections (technicalCapability, managementPlan, qualityControlPlan, pastPerformance)
-  const currentBidType = (data?.opportunity?.bidType || "RFQ").toUpperCase();
-  const rfqHiddenSections = ["technicalCapability", "managementPlan", "qualityControlPlan", "keyPersonnel", "staffingPlan", "pastPerformance"];
-  const sections = SECTION_DEFS.filter((s) => {
-    if (!getContent(s.key)) return false;
-    if (currentBidType === "RFQ" && rfqHiddenSections.includes(s.key)) return false;
-    return true;
-  });
+  // Show any section the backend actually drafted. For RFQs the section picker
+  // may add normally-RFP-only sections (technical/management/QCP/past perf);
+  // presence of content is the reliable signal — no bid-type filter.
+  const sections = SECTION_DEFS.filter((s) => Boolean(getContent(s.key)));
   const currentSection = sections[activeSection] || sections[0];
 
   return (
