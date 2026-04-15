@@ -37,28 +37,73 @@ interface AISummary {
  * Returns true on success, throws on failure.
  */
 export async function generateSummaryPdf(opportunity: Opportunity): Promise<boolean> {
-  // 1. Call backend for AI summary
-  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
-  const response = await fetch(`${API_BASE}/ai-summary`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ opportunity }),
-  });
+  // 1. Reuse cached summary if available — the modal/summary page already
+  // generated it and persisted it to localStorage. This ensures the PDF
+  // reflects exactly what the user saw on screen.
+  let summary: AISummary | null = null;
+  let opp: Record<string, string | number> | null = null;
 
-  if (!response.ok) {
-    throw new Error(`Backend error: ${response.status}`);
+  const cacheKey = `arber_ai_summary_${opportunity.noticeId || opportunity.id || "unknown"}`;
+  try {
+    const cachedRaw = typeof window !== "undefined" ? localStorage.getItem(cacheKey) : null;
+    if (cachedRaw) {
+      const cached = JSON.parse(cachedRaw);
+      if (cached?.summary) {
+        summary = cached.summary as AISummary;
+        opp = cached.opportunity || null;
+      }
+    }
+  } catch {
+    // ignore cache errors and fall through to fetch
   }
 
-  const data = await response.json();
-  if (!data.success) {
-    throw new Error(data.error || "AI summary generation failed");
+  if (!summary) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+    const response = await fetch(`${API_BASE}/ai-summary`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ opportunity }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || "AI summary generation failed");
+    }
+
+    summary = data.summary as AISummary;
+    opp = data.opportunity;
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        summary,
+        opportunity: opp,
+        cachedAt: Date.now(),
+      }));
+    } catch {
+      // ignore
+    }
   }
 
-  const summary: AISummary = data.summary;
-  const opp = data.opportunity;
+  // Fallback opp shape if cache stored only summary
+  if (!opp) {
+    opp = {
+      noticeId: opportunity.noticeId,
+      naicsCode: opportunity.naicsCode,
+      setAside: opportunity.setAside || "None",
+      status: opportunity.status,
+      complianceScore: opportunity.complianceScore ?? 0,
+      title: opportunity.title,
+      agency: opportunity.agency,
+      dueDate: opportunity.dueDate,
+      placeOfPerformance: opportunity.placeOfPerformance || "N/A",
+    } as Record<string, string | number>;
+  }
 
   // 2. Generate PDF
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
