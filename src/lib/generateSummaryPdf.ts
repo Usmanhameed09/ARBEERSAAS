@@ -40,8 +40,19 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   // 1. Reuse cached summary if available — the modal/summary page already
   // generated it and persisted it to localStorage. This ensures the PDF
   // reflects exactly what the user saw on screen.
+  interface OppShape {
+    noticeId: string;
+    naicsCode: string;
+    setAside: string;
+    status: string;
+    complianceScore: number;
+    title: string;
+    agency: string;
+    dueDate: string;
+    placeOfPerformance: string;
+  }
   let summary: AISummary | null = null;
-  let opp: Record<string, string | number> | null = null;
+  let opp: OppShape | null = null;
 
   const cacheKey = `arber_ai_summary_${opportunity.noticeId || opportunity.id || "unknown"}`;
   try {
@@ -102,7 +113,7 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
       agency: opportunity.agency,
       dueDate: opportunity.dueDate,
       placeOfPerformance: opportunity.placeOfPerformance || "N/A",
-    } as Record<string, string | number>;
+    };
   }
 
   // 2. Generate PDF
