@@ -54,7 +54,7 @@ interface AISummaryModalProps {
   onClose: () => void;
 }
 
-const API_BASE = "https://arbersaas.duckdns.org/api";
+const API_BASE = "https://arberwebapp.arbernetwork.com/api";
 // const API_BASE = "http://localhost:8000/api";
 
 export default function AISummaryModal({ opportunity, onClose }: AISummaryModalProps) {
