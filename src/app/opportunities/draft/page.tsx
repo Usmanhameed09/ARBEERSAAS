@@ -36,7 +36,7 @@ import {
   Wand2,
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
-import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits } from "@/lib/api";
+import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus } from "@/lib/api";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
 import DraftChatPanel from "@/components/DraftChatPanel";
@@ -329,6 +329,8 @@ export default function DraftViewerPage() {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState<number>(1);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
+  const [draftStatus, setDraftStatus] = useState<string>("in_progress");
+  const [statusUpdating, setStatusUpdating] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // AI Rewrite state
@@ -422,6 +424,7 @@ export default function DraftViewerPage() {
           if (result.success && result.draft) {
             setData(result);
             setDraftId(urlDraftId);
+            if (result.status) setDraftStatus(result.status);
             initializeContent(result.draft as unknown as Record<string, string>);
             if (result.pageLimits) setPageLimits(result.pageLimits);
             if (result.formattingRequirements) setFormattingReqs(result.formattingRequirements);
@@ -585,6 +588,26 @@ export default function DraftViewerPage() {
       setSaveStatus("error");
     }
   }, []);
+
+  const toggleSubmitted = useCallback(async () => {
+    const curDraftId = draftIdRef.current;
+    if (!curDraftId) return;
+    const next = draftStatus === "submitted" ? "in_progress" : "submitted";
+    if (next === "submitted" && !confirm("Mark this draft as submitted on SAM.gov? It will count toward your Submitted total on the dashboard.")) {
+      return;
+    }
+    setStatusUpdating(true);
+    try {
+      const result = await updateDraftStatus(curDraftId, next);
+      if (result.success && result.status) {
+        setDraftStatus(result.status);
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setStatusUpdating(false);
+    }
+  }, [draftStatus]);
 
   const updateContent = useCallback((key: string, value: string) => {
     setEditedContent((prev) => ({ ...prev, [key]: value }));
@@ -2217,6 +2240,26 @@ export default function DraftViewerPage() {
                     <span className="sm:hidden">Archived</span>
                   </button>
                 </>
+              )}
+              {draftId && (
+                <button
+                  onClick={toggleSubmitted}
+                  disabled={statusUpdating}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold border transition-colors disabled:opacity-40 ${
+                    draftStatus === "submitted"
+                      ? "bg-green-500/30 hover:bg-green-500/40 text-green-200 border-green-400/40"
+                      : "bg-white/10 hover:bg-white/20 text-white border-white/20"
+                  }`}
+                  title={draftStatus === "submitted" ? "Click to revert to In Progress" : "Mark as submitted on SAM.gov"}
+                >
+                  {statusUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">
+                    {draftStatus === "submitted" ? "Submitted ✓ — Undo" : "Mark Submitted"}
+                  </span>
+                  <span className="sm:hidden">
+                    {draftStatus === "submitted" ? "Submitted ✓" : "Submit"}
+                  </span>
+                </button>
               )}
               {draftId && (
                 <button

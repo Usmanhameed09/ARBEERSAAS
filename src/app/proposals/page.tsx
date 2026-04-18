@@ -104,12 +104,13 @@ export default function ProposalWorkspacePage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 mb-5">
         {[
           { label: "Total Drafts", value: drafts.length, color: "bg-slate-50 text-slate-700" },
           { label: "Draft", value: drafts.filter((d) => d.status === "draft").length, color: "bg-gray-50 text-gray-700" },
           { label: "In Progress", value: drafts.filter((d) => d.status === "in_progress").length, color: "bg-blue-50 text-blue-700" },
           { label: "Ready for Review", value: drafts.filter((d) => d.status === "ready_for_review").length, color: "bg-green-50 text-green-700" },
+          { label: "Submitted", value: drafts.filter((d) => d.status === "submitted").length, color: "bg-purple-50 text-purple-700" },
         ].map((stat) => (
           <div key={stat.label} className={`rounded-xl border border-gray-100 p-3 ${stat.color}`}>
             <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{stat.label}</p>

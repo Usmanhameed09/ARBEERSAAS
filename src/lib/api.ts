@@ -454,6 +454,7 @@ export interface SavedDraft {
   created_at: string;
   version: number;
   bidType?: string | null;
+  submitted_at?: string | null;
 }
 
 export interface PageLimit {
@@ -494,7 +495,7 @@ export async function listDrafts(): Promise<{ success: boolean; drafts: SavedDra
 }
 
 /** Load a single draft by ID */
-export async function loadDraft(draftId: string): Promise<DraftResult & { draftId?: string; pageLimits?: PageLimit[]; formattingRequirements?: FormattingReq[]; lastModified?: string }> {
+export async function loadDraft(draftId: string): Promise<DraftResult & { draftId?: string; pageLimits?: PageLimit[]; formattingRequirements?: FormattingReq[]; lastModified?: string; status?: string; submittedAt?: string | null }> {
   const resp = await fetch(`${API_BASE}/drafts/${draftId}`, { headers: getAuthHeaders() });
   return resp.json();
 }
@@ -504,6 +505,19 @@ export async function deleteDraft(draftId: string): Promise<{ success: boolean; 
   const resp = await fetch(`${API_BASE}/drafts/${draftId}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
+  });
+  return resp.json();
+}
+
+/** Update a draft's status (submitted / in_progress / etc.) */
+export async function updateDraftStatus(
+  draftId: string,
+  status: "draft" | "in_progress" | "ready_for_review" | "submitted",
+): Promise<{ success: boolean; status?: string; submitted_at?: string | null; error?: string }> {
+  const resp = await fetch(`${API_BASE}/drafts/${draftId}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status }),
   });
   return resp.json();
 }
