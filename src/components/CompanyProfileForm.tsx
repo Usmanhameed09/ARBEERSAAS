@@ -1153,23 +1153,24 @@ export default function CompanyProfileForm() {
       <SectionShell
         icon={Shield}
         title="Certification Documents"
-        description="Upload certification PDFs (8(a), HUBZone, SDVOSB, etc.). These will be auto-merged as appendices in your draft proposals."
+        description="Upload certification documents (8(a), HUBZone, SDVOSB, etc.) as PDF, image, or Word. These will be auto-merged as appendices in your draft proposals."
       >
         <div className="space-y-4">
           {/* Upload button */}
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition-colors cursor-pointer">
               <Plus className="w-4 h-4" />
-              {certUploading ? "Uploading..." : "Upload PDF"}
+              {certUploading ? "Uploading..." : "Upload File"}
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.docx,.doc,application/pdf,image/*"
                 className="hidden"
                 disabled={certUploading}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setCertUploading(true);
+                  setSaveError(null);
                   try {
                     const token = localStorage.getItem("arber_token");
                     const formData = new FormData();
@@ -1179,9 +1180,13 @@ export default function CompanyProfileForm() {
                       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                       body: formData,
                     });
+                    if (!resp.ok) {
+                      const text = await resp.text();
+                      setSaveError(`Upload failed (${resp.status}): ${text.slice(0, 200)}`);
+                      return;
+                    }
                     const result = await resp.json();
                     if (result.success) {
-                      // Refresh list
                       const listResp = await fetch(`${API_BASE}/certifications`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
@@ -1189,8 +1194,8 @@ export default function CompanyProfileForm() {
                     } else {
                       setSaveError(result.error || "Upload failed");
                     }
-                  } catch {
-                    setSaveError("Failed to upload certification file");
+                  } catch (err) {
+                    setSaveError(`Failed to upload: ${err instanceof Error ? err.message : String(err)}`);
                   } finally {
                     setCertUploading(false);
                     e.target.value = "";
@@ -1198,7 +1203,10 @@ export default function CompanyProfileForm() {
                 }}
               />
             </label>
-            <p className="text-xs text-slate-400">PDF files only. These get appended to your proposal drafts automatically.</p>
+            <p className="text-xs text-slate-400">PDF, image (JPG/PNG), or Word. These get appended to your proposal drafts automatically.</p>
+            {saveError && (
+              <p className="text-xs text-red-500 font-medium">{saveError}</p>
+            )}
           </div>
 
           {/* File list */}
