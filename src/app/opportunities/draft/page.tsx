@@ -726,11 +726,31 @@ export default function DraftViewerPage() {
     return Math.ceil(wordCount / 250); // ~250 words per page
   };
 
-  // Download filled Excel pricing sheet
+  // Download filled Excel pricing sheet.
+  // PRIMARY path: the backend orchestrator already ran fill_existing_excel
+  // during draft generation and returned the filled bytes as
+  // data.pricingExcel.base64. Use those — they are deterministic and match
+  // the CLIN rows the backend itself generated.
+  // FALLBACK: if the backend did not include pricingExcel (older draft, fill
+  // failed, etc.), fall back to the live /draft/fill-pricing-excel endpoint
+  // which re-downloads the SAM template and re-fills it.
   const handleDownloadPricingExcel = useCallback(async () => {
-    if (!data?.attachmentAnalysis?.pricingFormatUrl) return;
     setExcelDownloading(true);
     try {
+      const prefilled = data?.pricingExcel;
+      if (prefilled?.base64) {
+        const bytes = Uint8Array.from(atob(prefilled.base64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = prefilled.filename || "Pricing_Schedule_Filled.xlsx";
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      if (!data?.attachmentAnalysis?.pricingFormatUrl) return;
       const clinContent = getContent("clinData") || data.draft?.clinData || "";
       let clinParsed: unknown = clinContent;
       try { clinParsed = JSON.parse(clinContent); } catch { /* send as text */ }
@@ -2405,12 +2425,19 @@ export default function DraftViewerPage() {
                   <SectionContent content={getContent(currentSection?.key || "")} />
                 )}
 
-                {/* Excel Pricing Download — RFQ + RFP, when a pricing spreadsheet is attached */}
-                {currentSection?.key === "clinData" && data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl && (
+                {/* Excel Pricing Download — show whenever the backend
+                    pre-filled the template (pricingExcel) OR the legacy
+                    attachmentAnalysis path detected a spreadsheet template. */}
+                {currentSection?.key === "clinData" && (
+                  data?.pricingExcel?.base64 ||
+                  (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl)
+                ) && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet Detected</p>
-                      <p className="text-[10px] text-blue-600 mt-0.5">Source: {data.attachmentAnalysis.pricingFormatSource || "Solicitation attachment"}</p>
+                      <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet {data?.pricingExcel?.base64 ? "Filled" : "Detected"}</p>
+                      <p className="text-[10px] text-blue-600 mt-0.5">
+                        Source: {data?.pricingExcel?.filename || data?.attachmentAnalysis?.pricingFormatSource || "Solicitation attachment"}
+                      </p>
                     </div>
                     <button
                       onClick={handleDownloadPricingExcel}
