@@ -1461,7 +1461,9 @@ export default function DraftViewerPage() {
       // inline CLIN table in the PDF and just add a reference note — the user
       // downloads the auto-filled spreadsheet via the "Download Filled Excel"
       // button on the Pricing section. Applies to BOTH RFQ and RFP.
-      const hasExcelPricing = data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl;
+      const hasExcelPricing =
+        (data.pricingExcel?.base64 && data.pricingExcel?.source === "template_filled") ||
+        (data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl);
 
       doc.addPage();
       addPageHeader(solNum, comp.name);
@@ -1482,7 +1484,10 @@ export default function DraftViewerPage() {
         doc.setTextColor(60, 60, 60);
         doc.text("Pricing is provided in the attached Excel pricing schedule as required by the solicitation.", margin, y);
         y += 6;
-        doc.text(`Source: ${data.attachmentAnalysis?.pricingFormatSource || "Solicitation pricing spreadsheet"}`, margin, y);
+        const sourceName = data.pricingExcel?.filename
+          || data.attachmentAnalysis?.pricingFormatSource
+          || "Solicitation pricing spreadsheet";
+        doc.text(`Source: ${sourceName}`, margin, y);
       } else {
 
       // Try to parse structured CLIN data for table rendering
@@ -1667,9 +1672,9 @@ export default function DraftViewerPage() {
         doc.text(String(entry.page), pageWidth - margin, tocY, { align: "right" });
         tocY += 6;
       }
-      // Add Appendix A entry (DFARS) — page unknown until merge, show as "Appended"
+      // Add Appendix A entry — page unknown until merge, show as "Appended"
       doc.setFont("helvetica", "bold");
-      const appendixTitle = "Appendix A — FAR/DFARS Certifications";
+      const appendixTitle = "Appendix A — Certifications";
       const appDots = ".".repeat(Math.max(5, 80 - appendixTitle.length));
       doc.text(`${appendixTitle} ${appDots}`, margin, tocY);
       doc.text("Appended", pageWidth - margin, tocY, { align: "right" });
@@ -1820,14 +1825,34 @@ export default function DraftViewerPage() {
         }
       }
 
-      // Add a separator page before DFARS
+      // ─── APPENDIX A: User-uploaded certifications + DFARS fallback ──
+      // Pull the user's uploaded cert PDFs from /api/certifications first.
+      // If none exist, fall back to the static FAR/DFARS template.
       const { rgb } = await import("pdf-lib");
+      const token = localStorage.getItem("arber_token");
+
+      type UploadedCert = { id: string; fileName: string };
+      let uploadedCerts: UploadedCert[] = [];
+      try {
+        const certListResp = await fetch(`${API_BASE}/certifications`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (certListResp.ok) {
+          uploadedCerts = await certListResp.json();
+        }
+      } catch (err) {
+        console.warn("Could not list user certifications:", err);
+      }
+
       const separatorPage = mainPdfDoc.addPage([612, 792]);
       separatorPage.drawText("Appendix A", {
         x: 220, y: 450, size: 28,
         color: rgb(0.12, 0.16, 0.23),
       });
-      separatorPage.drawText("FAR & DFARS Representations and Certifications", {
+      const appendixSubtitle = uploadedCerts.length > 0
+        ? "Company Certifications"
+        : "FAR & DFARS Representations and Certifications";
+      separatorPage.drawText(appendixSubtitle, {
         x: 110, y: 410, size: 16,
         color: rgb(0.35, 0.35, 0.35),
       });
@@ -1836,19 +1861,40 @@ export default function DraftViewerPage() {
         color: rgb(0.5, 0.5, 0.5),
       });
 
-      // Fetch and merge the DFARS PDF
-      try {
-        const dfarsResponse = await fetch("/arber-dfars.pdf");
-        if (dfarsResponse.ok) {
-          const dfarsBytes = await dfarsResponse.arrayBuffer();
-          const dfarsPdf = await PDFDocument.load(dfarsBytes);
-          const dfarsPages = await mainPdfDoc.copyPages(dfarsPdf, dfarsPdf.getPageIndices());
-          for (const page of dfarsPages) {
+      let mergedAnyUserCert = false;
+      for (const cert of uploadedCerts) {
+        try {
+          const certResp = await fetch(`${API_BASE}/certifications/${cert.id}/download`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!certResp.ok) continue;
+          const certBytes = await certResp.arrayBuffer();
+          const certPdf = await PDFDocument.load(certBytes);
+          const certPages = await mainPdfDoc.copyPages(certPdf, certPdf.getPageIndices());
+          for (const page of certPages) {
             mainPdfDoc.addPage(page);
           }
+          mergedAnyUserCert = true;
+        } catch (err) {
+          console.warn(`Could not merge certification ${cert.fileName}:`, err);
         }
-      } catch (err) {
-        console.warn("Could not merge DFARS PDF:", err);
+      }
+
+      // Fall back to DFARS static template only when the user has no uploads
+      if (!mergedAnyUserCert) {
+        try {
+          const dfarsResponse = await fetch("/arber-dfars.pdf");
+          if (dfarsResponse.ok) {
+            const dfarsBytes = await dfarsResponse.arrayBuffer();
+            const dfarsPdf = await PDFDocument.load(dfarsBytes);
+            const dfarsPages = await mainPdfDoc.copyPages(dfarsPdf, dfarsPdf.getPageIndices());
+            for (const page of dfarsPages) {
+              mainPdfDoc.addPage(page);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not merge DFARS PDF:", err);
+        }
       }
 
       // Save merged PDF and download
