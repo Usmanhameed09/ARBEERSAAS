@@ -305,6 +305,7 @@ export interface DraftResult {
     pricingFormatType?: string;
     pricingFormatUrl?: string;
   };
+  pricingExcel?: { base64: string; filename: string; generated: boolean; source?: string };
   error?: string;
 }
 
@@ -363,7 +364,6 @@ export interface DraftResultV2 extends DraftResult {
   compliance?: ComplianceVerification | null;
   docAnalyses?: DocAnalysisSummary[];
   errors?: string[];
-  pricingExcel?: { base64: string; filename: string; generated: boolean };
 }
 
 /** V2 pipeline: Gemini 2.5 Pro per-document readers + section writers + compliance verifier */
