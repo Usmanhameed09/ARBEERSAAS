@@ -9,10 +9,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   X, Send, Paperclip, Trash2, Check, Loader2, FileText,
-  Sparkles, ChevronDown, ChevronUp,
+  Sparkles, ChevronDown, ChevronUp, Download, Paperclip as PaperclipIcon,
 } from "lucide-react";
 import {
   listChatMessages, clearChatMessages, uploadChatFile, streamDraftChat,
+  downloadChatUpload,
   type ChatMessage, type ChatUploadRecord, type ProposedChange, type ChatToolCall,
 } from "@/lib/api";
 
@@ -68,8 +69,87 @@ function ProposalCard({
     add_new_section: "Add new section",
     delete_section: "Delete",
     regenerate_pricing: "Regenerate pricing for",
+    download_file: "Filled file ready",
+    attach_pdf: "Attach to final PDF",
   };
   const label = labels[proposal.kind] || proposal.kind;
+
+  // ── Download-file proposal (filled Excel) ────────────────────────────
+  if (proposal.kind === "download_file") {
+    return (
+      <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+        <div className="flex items-center justify-between">
+          <div className="text-xs">
+            <span className="font-bold text-emerald-900">{label}</span>
+            <span className="ml-1 text-slate-700">{proposal.file_name || "file"}</span>
+            {typeof proposal.filled_count === "number" && (
+              <span className="ml-2 text-[10px] text-slate-600">
+                {proposal.filled_count} CLIN rows filled
+              </span>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              if (!proposal.file_id) return;
+              try {
+                await downloadChatUpload(proposal.file_id, proposal.file_name);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Download failed");
+              }
+            }}
+            className="text-[10px] font-bold text-white px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 rounded inline-flex items-center gap-1"
+          >
+            <Download className="w-3 h-3" /> DOWNLOAD
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Attach-PDF proposal ──────────────────────────────────────────────
+  if (proposal.kind === "attach_pdf") {
+    return (
+      <div className="mt-2 rounded-md border border-purple-200 bg-purple-50/60 px-3 py-2">
+        <div className="flex items-center justify-between">
+          <div className="text-xs">
+            <span className="font-bold text-purple-900">{label}</span>
+            <span className="ml-1 text-slate-700">
+              {proposal.file_name || proposal.label || proposal.source_file_id}
+            </span>
+            <span className="ml-2 text-[10px] font-mono text-slate-600">
+              {proposal.position}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {proposal.applied ? (
+              <span className="text-[10px] font-bold text-emerald-700 px-2 py-0.5 bg-emerald-100 rounded">
+                ATTACHED
+              </span>
+            ) : proposal.rejected ? (
+              <span className="text-[10px] font-bold text-slate-600 px-2 py-0.5 bg-slate-200 rounded">
+                REJECTED
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={onReject}
+                  className="text-[10px] font-bold text-rose-700 px-2 py-0.5 bg-white hover:bg-rose-50 border border-rose-200 rounded"
+                >
+                  REJECT
+                </button>
+                <button
+                  onClick={onApply}
+                  className="text-[10px] font-bold text-white px-2 py-0.5 bg-purple-600 hover:bg-purple-700 rounded inline-flex items-center gap-1"
+                >
+                  <PaperclipIcon className="w-3 h-3" /> ATTACH
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/60">

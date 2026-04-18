@@ -607,7 +607,32 @@ export default function DraftViewerPage() {
 
   // Apply a chat-proposed change to the draft and persist immediately.
   const handleApplyProposal = useCallback(
-    (change: ProposedChange) => {
+    async (change: ProposedChange) => {
+      // Stage-3 proposals that don't touch a section
+      if (change.kind === "download_file") {
+        // User downloads via the Download button on the card; Apply is a no-op.
+        return;
+      }
+      if (change.kind === "attach_pdf") {
+        const curDraftId = draftIdRef.current;
+        if (!curDraftId || !change.source_file_id) return;
+        try {
+          const { createPdfInsert } = await import("@/lib/api");
+          const resp = await createPdfInsert({
+            draftId: curDraftId,
+            sourceFileId: change.source_file_id,
+            position: change.position || "appendix",
+            label: change.label || change.file_name || "",
+          });
+          if (!resp.success) {
+            alert(`Attach failed: ${resp.error || "unknown error"}`);
+          }
+        } catch (e) {
+          alert(`Attach failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return;
+      }
+
       const key = change.section_key;
       if (!key) return;
       switch (change.kind) {
@@ -1887,6 +1912,82 @@ export default function DraftViewerPage() {
         } catch (sfErr) {
           console.warn("Could not merge SF1449:", sfErr);
         }
+      }
+
+      // ─── CHAT-REGISTERED PDF INSERTS (Stage 3) ──
+      // Splice in any PDFs/images the user attached via the chat assistant
+      // (SF1449 supplements, bonding letters, extra forms, etc).
+      try {
+        const { listPdfInserts } = await import("@/lib/api");
+        const curDraftId = draftIdRef.current;
+        if (!curDraftId) throw new Error("draftId not available");
+        const ir = await listPdfInserts(curDraftId);
+        const pdfInserts = ir.success ? ir.inserts : [];
+        const insertToken = localStorage.getItem("arber_token");
+        for (const ins of pdfInserts) {
+          if (!ins.source_file_id) continue;
+          try {
+            const r = await fetch(
+              `${API_BASE}/draft/chat/upload/${encodeURIComponent(ins.source_file_id)}/download`,
+              { headers: insertToken ? { Authorization: `Bearer ${insertToken}` } : {} },
+            );
+            if (!r.ok) continue;
+            const bytes = await r.arrayBuffer();
+            const name = (ins.file_name || "").toLowerCase();
+            const mime = (ins.mime_type || "").toLowerCase();
+            const isImg =
+              mime.startsWith("image/") ||
+              /\.(png|jpe?g|gif|webp|bmp)$/.test(name);
+
+            // Resolve insert index inside the CURRENT main document
+            const pageCount = mainPdfDoc.getPageCount();
+            let idx = pageCount; // default: append at end (== "appendix")
+            const pos = (ins.position || "appendix").trim();
+            if (pos === "after_cover") {
+              idx = Math.min(1, pageCount);
+            } else if (pos.startsWith("page:")) {
+              const n = parseInt(pos.slice(5), 10);
+              if (!isNaN(n) && n > 0) idx = Math.min(n, pageCount);
+            }
+            // before_section:KEY — we don't track per-section page indices
+            // reliably here, so fall back to appendix placement.
+
+            if (isImg) {
+              // Single page with the image centered
+              const imgBytes = new Uint8Array(bytes);
+              let img;
+              try {
+                img = await mainPdfDoc.embedPng(imgBytes);
+              } catch {
+                img = await mainPdfDoc.embedJpg(imgBytes);
+              }
+              const pageW = 612;
+              const pageH = 792;
+              const maxW = pageW - 72;
+              const maxH = pageH - 72;
+              const scale = Math.min(maxW / img.width, maxH / img.height);
+              const w = img.width * scale;
+              const h = img.height * scale;
+              const page = mainPdfDoc.insertPage(idx, [pageW, pageH]);
+              page.drawImage(img, {
+                x: (pageW - w) / 2,
+                y: (pageH - h) / 2,
+                width: w,
+                height: h,
+              });
+            } else {
+              const insPdf = await PDFDocument.load(bytes);
+              const copied = await mainPdfDoc.copyPages(insPdf, insPdf.getPageIndices());
+              for (let i = 0; i < copied.length; i++) {
+                mainPdfDoc.insertPage(idx + i, copied[i]);
+              }
+            }
+          } catch (insErr) {
+            console.warn(`Could not splice PDF insert ${ins.label || ins.id}:`, insErr);
+          }
+        }
+      } catch (piErr) {
+        console.warn("Could not load PDF inserts:", piErr);
       }
 
       // ─── APPENDIX A: User-uploaded certifications + DFARS fallback ──

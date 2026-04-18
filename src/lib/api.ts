@@ -610,8 +610,10 @@ export interface ProposedChange {
     | "append_to_section"
     | "add_new_section"
     | "delete_section"
-    | "regenerate_pricing";
-  section_key: string;
+    | "regenerate_pricing"
+    | "download_file"
+    | "attach_pdf";
+  section_key?: string;
   before?: string;
   after?: string;
   title?: string;
@@ -621,6 +623,29 @@ export interface ProposedChange {
   appended_text?: string;
   target_bid?: number | null;
   tier?: string | null;
+  // download_file
+  file_id?: string;
+  file_name?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  filled_count?: number;
+  // attach_pdf
+  source_file_id?: string;
+  position?: string;
+  label?: string;
+}
+
+export interface PdfInsert {
+  id: string;
+  source_file_id: string;
+  position: string;
+  label: string;
+  sort_order?: number;
+  created_at?: string;
+  file_name?: string;
+  mime_type?: string;
+  page_count?: number;
+  signed_url?: string;
 }
 
 export type ChatStreamEvent =
@@ -668,6 +693,62 @@ export async function uploadChatFile(
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
     },
+  );
+  return resp.json();
+}
+
+/** GET /api/draft/chat/upload/{file_id}/download — fetch chat-upload bytes (e.g. filled Excel) */
+export async function downloadChatUpload(fileId: string, fileName?: string): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+  const resp = await fetch(
+    `${API_BASE}/draft/chat/upload/${encodeURIComponent(fileId)}/download`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "download";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** GET /api/draft/pdf-inserts — list PDF/image inserts registered for this draft */
+export async function listPdfInserts(
+  draftId: string,
+): Promise<{ success: boolean; inserts: PdfInsert[] }> {
+  const resp = await fetch(
+    `${API_BASE}/draft/pdf-inserts?draftId=${encodeURIComponent(draftId)}`,
+    { headers: getAuthHeaders() },
+  );
+  if (!resp.ok) return { success: false, inserts: [] };
+  return resp.json();
+}
+
+/** POST /api/draft/pdf-inserts — register a PDF/image insert */
+export async function createPdfInsert(payload: {
+  draftId: string;
+  sourceFileId: string;
+  position: string;
+  label?: string;
+  sortOrder?: number;
+}): Promise<{ success: boolean; id?: string; error?: string }> {
+  const resp = await fetch(`${API_BASE}/draft/pdf-inserts`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
+/** DELETE /api/draft/pdf-inserts/{id} — remove a registered PDF insert */
+export async function deletePdfInsert(insertId: string): Promise<{ success: boolean }> {
+  const resp = await fetch(
+    `${API_BASE}/draft/pdf-inserts/${encodeURIComponent(insertId)}`,
+    { method: "DELETE", headers: getAuthHeaders() },
   );
   return resp.json();
 }
