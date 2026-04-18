@@ -35,10 +35,11 @@ import {
   Info,
   Wand2,
 } from "lucide-react";
-import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification } from "@/lib/api";
+import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits } from "@/lib/api";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
+import DraftChatPanel from "@/components/DraftChatPanel";
 
 interface DraftSection {
   key: string;
@@ -352,6 +353,13 @@ export default function DraftViewerPage() {
   // Excel pricing state
   const [excelDownloading, setExcelDownloading] = useState(false);
 
+  // Draft Assistant chat panel
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+  // Sections added by the chat assistant via add_new_section — extend the
+  // static SECTION_DEFS so they show up in the sidebar and PDF render.
+  const [extraSections, setExtraSections] = useState<DraftSection[]>([]);
+
   // Provenance modal state (V2 pipeline) — shows which sources were used to generate a section
   const [provenanceOpen, setProvenanceOpen] = useState<string | null>(null); // section key or null
   const provenanceMap: Record<string, SectionProvenance> =
@@ -596,6 +604,62 @@ export default function DraftViewerPage() {
     setEditMode(false);
     triggerSave();
   }, [data, editedContent, triggerSave]);
+
+  // Apply a chat-proposed change to the draft and persist immediately.
+  const handleApplyProposal = useCallback(
+    (change: ProposedChange) => {
+      const key = change.section_key;
+      if (!key) return;
+      switch (change.kind) {
+        case "edit_section":
+        case "replace_section":
+        case "append_to_section": {
+          const next = change.after ?? "";
+          setEditedContent((prev) => ({ ...prev, [key]: next }));
+          setSaveStatus("unsaved");
+          setTimeout(() => triggerSave(), 200);
+          break;
+        }
+        case "add_new_section": {
+          const title = change.title || key;
+          // Register the new section in the sidebar if it doesn't already exist
+          // in SECTION_DEFS or extraSections, so it shows up in the UI and PDF.
+          setExtraSections((prev) => {
+            const known = new Set([...SECTION_DEFS.map((s) => s.key), ...prev.map((s) => s.key)]);
+            if (known.has(key)) return prev;
+            const newDef: DraftSection = {
+              key,
+              title,
+              icon: <Sparkles className="w-3.5 h-3.5" />,
+            };
+            return [...prev, newDef];
+          });
+          setEditedContent((prev) => ({ ...prev, [key]: change.after ?? "" }));
+          setSaveStatus("unsaved");
+          setTimeout(() => triggerSave(), 200);
+          break;
+        }
+        case "delete_section": {
+          setEditedContent((prev) => ({ ...prev, [key]: "" }));
+          setExtraSections((prev) => prev.filter((s) => s.key !== key));
+          setSaveStatus("unsaved");
+          setTimeout(() => triggerSave(), 200);
+          break;
+        }
+        case "regenerate_pricing": {
+          // Pricing regen is a heavier flow handled by the existing pricing
+          // engine UI — surface a hint to the user instead of silently no-op'ing.
+          alert(
+            "Pricing regeneration was proposed by the assistant. Open the CLIN Pricing section and use the existing pricing controls to re-run with the suggested target/tier.",
+          );
+          break;
+        }
+        default:
+          break;
+      }
+    },
+    [triggerSave],
+  );
 
   // AI Rewrite handler
   const handleAiRewrite = useCallback(async (sectionKey: string) => {
@@ -1949,7 +2013,7 @@ export default function DraftViewerPage() {
   // Show any section the backend actually drafted. For RFQs the section picker
   // may add normally-RFP-only sections (technical/management/QCP/past perf);
   // presence of content is the reliable signal — no bid-type filter.
-  const sections = SECTION_DEFS.filter((s) => Boolean(getContent(s.key)));
+  const sections = [...SECTION_DEFS, ...extraSections].filter((s) => Boolean(getContent(s.key)));
   const currentSection = sections[activeSection] || sections[0];
 
   return (
@@ -2018,6 +2082,18 @@ export default function DraftViewerPage() {
               >
                 {editMode ? <Cloud className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
                 {editMode ? "Save" : "Edit"}
+              </button>
+              <button
+                onClick={() => setChatOpen((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold border transition-colors ${
+                  chatOpen
+                    ? "bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/30"
+                    : "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                }`}
+                title="Draft Assistant — chat to refine, add files, edit anything"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Assistant</span>
               </button>
               {opp.noticeId && (
                 <>
@@ -2852,6 +2928,18 @@ export default function DraftViewerPage() {
           </div>
         );
       })()}
+
+      {/* Draft Assistant — slide-out chat panel */}
+      {draftId && (
+        <DraftChatPanel
+          draftId={draftId}
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          onApplyChange={handleApplyProposal}
+          prefill={chatPrefill}
+          onPrefillConsumed={() => setChatPrefill(null)}
+        />
+      )}
     </div>
   );
 }

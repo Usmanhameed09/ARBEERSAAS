@@ -563,3 +563,153 @@ export async function loadFetchState(
   });
   return resp.json();
 }
+
+// ============================================================================
+// DRAFT CHAT ASSISTANT — ChatGPT-style refinement of generated drafts
+// ============================================================================
+
+export type ChatRole = "user" | "assistant" | "tool" | "system";
+
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  args?: Record<string, unknown>;
+  result?: string | null;
+  applied?: boolean;
+}
+
+export interface ChatAttachmentRef {
+  file_id: string;
+  file_name: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  draft_id: string;
+  role: ChatRole;
+  content: string;
+  tool_calls?: ChatToolCall[] | null;
+  attachments?: ChatAttachmentRef[] | null;
+  section_snapshots?: Record<string, string> | null;
+  created_at: string;
+}
+
+export interface ChatUploadRecord {
+  id: string;
+  file_name: string;
+  page_count?: number;
+  size_bytes?: number;
+  created_at: string;
+}
+
+export interface ProposedChange {
+  tool_id?: string;
+  kind:
+    | "edit_section"
+    | "replace_section"
+    | "append_to_section"
+    | "add_new_section"
+    | "delete_section"
+    | "regenerate_pricing";
+  section_key: string;
+  before?: string;
+  after?: string;
+  title?: string;
+  after_key?: string | null;
+  instruction?: string;
+  rationale?: string;
+  appended_text?: string;
+  target_bid?: number | null;
+  tier?: string | null;
+}
+
+export type ChatStreamEvent =
+  | { type: "token"; delta: string }
+  | { type: "tool_start"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; id: string; summary: string; data?: Record<string, unknown> }
+  | { type: "proposed_change"; tool_id: string; change: ProposedChange }
+  | { type: "final"; content: string; proposed_changes: ProposedChange[] }
+  | { type: "error"; message: string }
+  | { type: "done" };
+
+/** GET /api/draft/chat/messages — load full chat history for a draft */
+export async function listChatMessages(
+  draftId: string,
+): Promise<{ success: boolean; messages: ChatMessage[]; uploads: ChatUploadRecord[] }> {
+  const resp = await fetch(
+    `${API_BASE}/draft/chat/messages?draftId=${encodeURIComponent(draftId)}`,
+    { headers: getAuthHeaders() },
+  );
+  if (!resp.ok) return { success: false, messages: [], uploads: [] };
+  return resp.json();
+}
+
+/** DELETE /api/draft/chat/messages — clear conversation history */
+export async function clearChatMessages(draftId: string): Promise<{ success: boolean }> {
+  const resp = await fetch(
+    `${API_BASE}/draft/chat/messages?draftId=${encodeURIComponent(draftId)}`,
+    { method: "DELETE", headers: getAuthHeaders() },
+  );
+  return resp.json();
+}
+
+/** POST /api/draft/chat/upload — attach a file to chat for analysis */
+export async function uploadChatFile(
+  draftId: string,
+  file: File,
+): Promise<{ success: boolean; fileId?: string; fileName?: string; pageCount?: number; error?: string }> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+  const fd = new FormData();
+  fd.append("file", file);
+  const resp = await fetch(
+    `${API_BASE}/draft/chat/upload?draftId=${encodeURIComponent(draftId)}`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    },
+  );
+  return resp.json();
+}
+
+/**
+ * POST /api/draft/chat — stream the chat assistant response.
+ * Yields each parsed SSE event in order until the server sends `{type:"done"}`.
+ */
+export async function* streamDraftChat(payload: {
+  draftId: string;
+  message: string;
+  attachmentIds?: string[];
+}): AsyncGenerator<ChatStreamEvent, void, void> {
+  const resp = await fetch(`${API_BASE}/draft/chat`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok || !resp.body) {
+    yield { type: "error", message: `HTTP ${resp.status}` };
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 2);
+      if (!raw.startsWith("data:")) continue;
+      const json = raw.slice(5).trim();
+      if (!json) continue;
+      try {
+        yield JSON.parse(json) as ChatStreamEvent;
+      } catch (err) {
+        console.warn("[chat-sse] parse error", err, json.slice(0, 80));
+      }
+    }
+  }
+}
