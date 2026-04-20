@@ -23,6 +23,7 @@ import {
   PenTool,
   ExternalLink,
   Link2,
+  BarChart3,
 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { formatContractValue } from "@/lib/usaspending";
@@ -367,6 +368,79 @@ export default function OpportunityDetailModal({
                   <p className="text-[10px] sm:text-[11px] text-emerald-700 font-medium leading-snug">{opportunity.pricingPrediction.strategy}</p>
                 </div>
               )}
+            </div>
+          ) : opportunity.marketBenchmark && opportunity.marketBenchmark.sampleSize >= 3 ? (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 sm:p-4 mb-4 sm:mb-5">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                    <BarChart3 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-gray-900">Market Benchmark — No Incumbent</h3>
+                    <p className="text-[9px] sm:text-[10px] text-gray-500">
+                      Based on {opportunity.marketBenchmark.sampleSize} comparable awards ({opportunity.marketBenchmark.yearsCovered}) — NAICS {opportunity.marketBenchmark.naicsCode}
+                      {opportunity.marketBenchmark.agencyFilter ? `, ${opportunity.marketBenchmark.agencyFilter}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-indigo-200 text-indigo-800">
+                  Benchmark
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-3">
+                <div className="bg-white rounded-lg p-2 sm:p-2.5 border border-indigo-100">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-gray-400 mb-0.5">25th Pctile</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-gray-900">{formatContractValue(opportunity.marketBenchmark.p25AwardAmount)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 sm:p-2.5 border-2 border-indigo-300">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-indigo-600 mb-0.5">Median</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-indigo-700">{formatContractValue(opportunity.marketBenchmark.medianAwardAmount)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 sm:p-2.5 border border-indigo-100">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-gray-400 mb-0.5">75th Pctile</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-gray-900">{formatContractValue(opportunity.marketBenchmark.p75AwardAmount)}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-3">
+                <div className="bg-white/60 rounded-lg p-1.5 sm:p-2 border border-indigo-100">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Average</p>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-700">{formatContractValue(opportunity.marketBenchmark.avgAwardAmount)}</p>
+                </div>
+                <div className="bg-white/60 rounded-lg p-1.5 sm:p-2 border border-indigo-100">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Min</p>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-700">{formatContractValue(opportunity.marketBenchmark.minAwardAmount)}</p>
+                </div>
+                <div className="bg-white/60 rounded-lg p-1.5 sm:p-2 border border-indigo-100">
+                  <p className="text-[8px] sm:text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Max</p>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-700">{formatContractValue(opportunity.marketBenchmark.maxAwardAmount)}</p>
+                </div>
+              </div>
+
+              {opportunity.marketBenchmark.topContractors?.length > 0 && (
+                <div className="bg-white rounded-lg p-2.5 sm:p-3 border border-indigo-100">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="text-[9px] sm:text-[10px] font-bold text-gray-700 uppercase tracking-wide">Top Contractors in Sample</span>
+                  </div>
+                  <ul className="space-y-1">
+                    {opportunity.marketBenchmark.topContractors.slice(0, 3).map((c) => (
+                      <li key={c.name} className="flex items-center justify-between text-[10px] sm:text-xs">
+                        <span className="text-gray-700 truncate pr-2">{c.name}</span>
+                        <span className="text-gray-400 font-medium whitespace-nowrap">
+                          {c.award_count}× · {formatContractValue(c.total_awarded)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-[10px] sm:text-[11px] text-indigo-700 mt-2 leading-snug">
+                <strong>Note:</strong> This is a market-wide reference, not a bid prediction. Use the median as a starting point and adjust for scope, location, and your cost structure.
+              </p>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 mb-4 sm:mb-5">

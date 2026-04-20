@@ -26,6 +26,21 @@ export interface IncumbentContractor {
   office?: string;
 }
 
+export interface MarketBenchmark {
+  sampleSize: number;
+  avgAwardAmount: number;
+  medianAwardAmount: number;
+  p25AwardAmount: number;
+  p75AwardAmount: number;
+  minAwardAmount: number;
+  maxAwardAmount: number;
+  yearsCovered: string;
+  topContractors: { name: string; award_count: number; total_awarded: number }[];
+  searchStrategy: string;
+  naicsCode: string;
+  agencyFilter: string;
+}
+
 export interface Opportunity {
   id: string;
   noticeId: string;
@@ -71,6 +86,7 @@ export interface Opportunity {
   isNew?: boolean;
   pricingPrediction?: PricingPrediction;
   incumbent?: IncumbentContractor;
+  marketBenchmark?: MarketBenchmark;
   bidKillers?: {
     ruleCode: string;
     ruleName: string;
