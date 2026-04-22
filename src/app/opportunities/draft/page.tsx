@@ -1098,9 +1098,33 @@ export default function DraftViewerPage() {
         return y + drawHmm + 4;
       };
 
+      // Collapse "H o m e   F r i e d" letter-spacing artifacts from PDF
+      // text extraction. Runs of 4+ single-alnum-char tokens separated by
+      // single spaces are fused; word gaps use 2+ spaces (or tabs).
+      const collapseLetterSpacing = (raw: string): string => {
+        const detector = /(?:(?<=\s)|^)\S(?:[ \t]+\S){3,}(?=[ \t]|$)/;
+        const splitGap = /([ \t]{2,})/;
+        return raw.split("\n").map((line) => {
+          if (!detector.test(line)) return line;
+          const parts = line.split(splitGap);
+          return parts.map((p) => {
+            if (/^[ \t]{2,}$/.test(p)) return " ";
+            const tokens = p.split(/\s+/).filter(Boolean);
+            if (tokens.length < 3) return p;
+            const allSingle = tokens.every((t) => {
+              let alnum = 0;
+              for (const c of t) if (/[A-Za-z0-9]/.test(c)) alnum++;
+              return alnum <= 1;
+            });
+            return allSingle ? tokens.join("") : p;
+          }).join("");
+        }).join("\n");
+      };
+
       // Helper: write markdown-aware multi-line text.
       // Handles: # headings, **bold**, - bullets, 1. numbered, | tables, blockquotes, ```mermaid diagrams.
       const writeMultiLine = (text: string, startY: number, fontSize: number = 10): number => {
+        text = collapseLetterSpacing(text);
         // First, extract mermaid blocks and replace with placeholders we'll match line-by-line
         // A mermaid fence is multi-line, so split the input around fences.
         const fenceRe = /```mermaid\s*\n([\s\S]*?)```/g;
