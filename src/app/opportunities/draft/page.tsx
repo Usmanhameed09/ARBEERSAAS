@@ -1104,6 +1104,10 @@ export default function DraftViewerPage() {
       // Also normalize NBSP/narrow spaces → regular space so jsPDF can wrap
       // (the right-margin overflow we saw was NBSP between every glyph).
       const collapseLetterSpacing = (raw: string): string => {
+        // Strip zero-width / bidi / formatting chars first — these are often
+        // injected between glyphs and render as implicit spaces in jsPDF while
+        // extracting as invisible (so the "underlying text looks normal" trap).
+        raw = raw.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u206A-\u206F\uFEFF]/g, "");
         raw = raw.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
         const detector = /(?:(?<=\s)|^)\S(?:[ \t]+\S){3,}(?=[ \t]|$)/;
         const splitGap = /([ \t]{2,})/;
