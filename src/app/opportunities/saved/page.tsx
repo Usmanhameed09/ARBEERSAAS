@@ -3,20 +3,41 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Bookmark, Loader2, Search } from "lucide-react";
+import { Bookmark, Loader2, Search, Trash2 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import OpportunityCard from "@/components/OpportunityCard";
 import OpportunityDetailModal from "@/components/OpportunityDetailModal";
-import { fetchSavedOpportunities } from "@/lib/api";
+import {
+  fetchSavedOpportunities,
+  deleteSavedOpportunity,
+  clearAllSavedOpportunities,
+} from "@/lib/api";
 import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 
 function SavedOpportunitiesContent() {
   const searchParams = useSearchParams();
-  const { savedIds } = useSavedOpportunities();
+  const { savedIds, removeLocal, clearAllLocal } = useSavedOpportunities();
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   const [savedOpps, setSavedOpps] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const handleDeleteSaved = async (noticeId: string) => {
+    try {
+      await deleteSavedOpportunity(noticeId);
+      setSavedOpps((prev) => prev.filter((o) => o.noticeId !== noticeId));
+      removeLocal(noticeId);
+    } catch { /* silent */ }
+  };
+
+  const handleClearAllSaved = async () => {
+    if (!confirm("Delete all saved opportunities? This cannot be undone.")) return;
+    try {
+      await clearAllSavedOpportunities();
+      setSavedOpps([]);
+      clearAllLocal();
+    } catch { /* silent */ }
+  };
 
   useEffect(() => {
     setSearchQuery(searchParams.get("search") || "");
@@ -67,18 +88,29 @@ function SavedOpportunitiesContent() {
           </div>
         </div>
 
-        {(loading || visibleOpps.length > 0 || !!searchQuery) && (
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by solicitation #, title, agency..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
-            />
-          </div>
-        )}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          {(loading || visibleOpps.length > 0 || !!searchQuery) && (
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by solicitation #, title, agency..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
+              />
+            </div>
+          )}
+          {visibleOpps.length > 0 && (
+            <button
+              onClick={handleClearAllSaved}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors whitespace-nowrap"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear All Saved
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -91,11 +123,19 @@ function SavedOpportunitiesContent() {
       ) : filteredOpps.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
           {filteredOpps.map((opp) => (
-            <OpportunityCard
-              key={opp.id}
-              opportunity={opp}
-              onViewDetails={setSelectedOpp}
-            />
+            <div key={opp.id} className="relative group">
+              <OpportunityCard
+                opportunity={opp}
+                onViewDetails={setSelectedOpp}
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteSaved(opp.noticeId); }}
+                className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 border border-red-200 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                title="Delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       ) : visibleOpps.length > 0 && searchQuery ? (

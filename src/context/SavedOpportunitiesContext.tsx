@@ -19,6 +19,8 @@ interface SavedOpportunitiesContextType {
   toggle: (id: string, noticeId: string) => void;
   isSaved: (id: string) => boolean;
   count: number;
+  removeLocal: (noticeId: string) => void;
+  clearAllLocal: () => void;
 }
 
 const SavedOpportunitiesContext = createContext<SavedOpportunitiesContextType>({
@@ -26,6 +28,8 @@ const SavedOpportunitiesContext = createContext<SavedOpportunitiesContextType>({
   toggle: () => {},
   isSaved: () => false,
   count: 0,
+  removeLocal: () => {},
+  clearAllLocal: () => {},
 });
 
 export function SavedOpportunitiesProvider({ children }: { children: ReactNode }) {
@@ -133,9 +137,32 @@ export function SavedOpportunitiesProvider({ children }: { children: ReactNode }
 
   const isSaved = useCallback((id: string) => savedIds.has(id), [savedIds]);
 
+  // Drop a saved item from context state *without* firing the toggle PATCH.
+  // Used after a hard-delete call has already removed the row server-side.
+  const removeLocal = useCallback((noticeId: string) => {
+    const frontendId = `sam-${noticeId}`;
+    setSavedIds((prev) => {
+      if (!prev.has(frontendId)) return prev;
+      const next = new Set(prev);
+      next.delete(frontendId);
+      return next;
+    });
+    setSavedNoticeIds((prev) => {
+      if (!prev.has(noticeId)) return prev;
+      const next = new Set(prev);
+      next.delete(noticeId);
+      return next;
+    });
+  }, []);
+
+  const clearAllLocal = useCallback(() => {
+    setSavedIds(new Set());
+    setSavedNoticeIds(new Set());
+  }, []);
+
   return (
     <SavedOpportunitiesContext.Provider
-      value={{ savedIds, toggle, isSaved, count: savedIds.size }}
+      value={{ savedIds, toggle, isSaved, count: savedIds.size, removeLocal, clearAllLocal }}
     >
       {children}
     </SavedOpportunitiesContext.Provider>
