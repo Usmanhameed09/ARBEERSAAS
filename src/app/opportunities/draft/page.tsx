@@ -1101,7 +1101,10 @@ export default function DraftViewerPage() {
       // Collapse "H o m e   F r i e d" letter-spacing artifacts from PDF
       // text extraction. Runs of 4+ single-alnum-char tokens separated by
       // single spaces are fused; word gaps use 2+ spaces (or tabs).
+      // Also normalize NBSP/narrow spaces → regular space so jsPDF can wrap
+      // (the right-margin overflow we saw was NBSP between every glyph).
       const collapseLetterSpacing = (raw: string): string => {
+        raw = raw.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
         const detector = /(?:(?<=\s)|^)\S(?:[ \t]+\S){3,}(?=[ \t]|$)/;
         const splitGap = /([ \t]{2,})/;
         return raw.split("\n").map((line) => {
