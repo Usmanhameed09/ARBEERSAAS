@@ -602,12 +602,55 @@ export default function DraftViewerPage() {
       if (result.success && result.status) {
         setDraftStatus(result.status);
       }
+
+      // After a successful submit, push the proposal PDF (and filled pricing
+      // Excel if available) to the Trello card as file attachments.
+      // Runs fire-and-forget — failures are silent so they don't block the UI.
+      if (next === "submitted" && result.success && result.trello?.card_id) {
+        const cardId: string = result.trello.card_id;
+        (async () => {
+          try {
+            // 1. Generate the proposal PDF blob (same pipeline as Download PDF).
+            const pdfBlob = await handleDownloadPdf("blob");
+            if (!pdfBlob) return;
+
+            const comp = data?.company;
+            const opp = data?.opportunity;
+            const solNum = opp?.noticeId || "";
+            const compName = (comp?.name || "Company").replace(/[^a-zA-Z0-9 _-]/g, "").trim();
+            const pdfFilename = `${compName}_SOL_${solNum}_Response.pdf`;
+
+            const formData = new FormData();
+            formData.append("card_id", cardId);
+            formData.append("proposal_pdf", new File([pdfBlob], pdfFilename, { type: "application/pdf" }));
+
+            // 2. Pricing Excel — use pre-filled base64 if available.
+            const pricing = data?.pricingExcel;
+            if (pricing?.base64) {
+              const xlsxBytes = Uint8Array.from(atob(pricing.base64), c => c.charCodeAt(0));
+              const xlsxName = pricing.filename || `Pricing_Schedule_${solNum}.xlsx`;
+              formData.append("pricing_excel", new File([xlsxBytes], xlsxName, {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              }));
+            }
+
+            const token = localStorage.getItem("arber_token");
+            await fetch(`${API_BASE}/draft/trello-attach`, {
+              method: "POST",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              body: formData,
+            });
+          } catch {
+            // Silent — Trello file attachment is best-effort.
+          }
+        })();
+      }
     } catch {
       /* silent */
     } finally {
       setStatusUpdating(false);
     }
-  }, [draftStatus]);
+  }, [draftStatus, data, handleDownloadPdf]);
 
   const updateContent = useCallback((key: string, value: string) => {
     setEditedContent((prev) => ({ ...prev, [key]: value }));
@@ -906,7 +949,7 @@ export default function DraftViewerPage() {
     });
   }, [getContent]);
 
-  const handleDownloadPdf = useCallback(async (mode: "download" | "preview" = "download") => {
+  const handleDownloadPdf = useCallback(async (mode: "download" | "preview" | "blob" = "download"): Promise<Blob | null> => {
     if (!data?.draft) return;
     setGeneratingPdf(true);
 
@@ -2116,21 +2159,21 @@ export default function DraftViewerPage() {
         }
       }
 
-      // Save merged PDF and download
+      // Save merged PDF
       const mergedBytes = await mainPdfDoc.save();
       const blob = new Blob([mergedBytes.buffer as ArrayBuffer], { type: "application/pdf" });
       const filename = `${comp.name || "Company"}_SOL_${solNum}_Response.pdf`;
 
-      if (mode === "preview") {
+      if (mode === "blob") {
+        return blob;
+      } else if (mode === "preview") {
         const previewUrl = URL.createObjectURL(blob);
         const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
         if (isMobile) {
-          // Mobile browsers often block window.open for blob URLs
           window.location.href = previewUrl;
         } else {
           window.open(previewUrl, "_blank", "noopener,noreferrer");
         }
-        // Delay revoke to allow the new tab/page to load the PDF
         setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
       } else {
         const url = URL.createObjectURL(blob);
@@ -2142,9 +2185,11 @@ export default function DraftViewerPage() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
+      return null;
     } catch (err) {
       console.error("PDF generation error:", err);
-      alert("Failed to generate PDF. Please try again.");
+      if (mode !== "blob") alert("Failed to generate PDF. Please try again.");
+      return null;
     } finally {
       setGeneratingPdf(false);
     }
