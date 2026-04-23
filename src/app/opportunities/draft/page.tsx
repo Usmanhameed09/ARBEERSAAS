@@ -954,7 +954,7 @@ export default function DraftViewerPage() {
   }, [getContent]);
 
   const handleDownloadPdf = useCallback(async (mode: "download" | "preview" | "blob" = "download"): Promise<Blob | null> => {
-    if (!data?.draft) return;
+    if (!data?.draft) return null;
     setGeneratingPdf(true);
 
     try {
