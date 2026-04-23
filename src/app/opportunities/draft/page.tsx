@@ -496,6 +496,9 @@ export default function DraftViewerPage() {
     [editedContent]
   );
 
+  // Ref so toggleSubmitted (declared before handleDownloadPdf) can call it.
+  const handleDownloadPdfRef = useRef<((mode: "download" | "preview" | "blob") => Promise<Blob | null>) | null>(null);
+
   // Use refs to always have current values in save functions (avoids stale closures)
   const dataRef = useRef(data);
   const draftIdRef = useRef(draftId);
@@ -611,7 +614,7 @@ export default function DraftViewerPage() {
         (async () => {
           try {
             // 1. Generate the proposal PDF blob (same pipeline as Download PDF).
-            const pdfBlob = await handleDownloadPdf("blob");
+            const pdfBlob = await handleDownloadPdfRef.current?.("blob");
             if (!pdfBlob) return;
 
             const comp = data?.company;
@@ -650,7 +653,8 @@ export default function DraftViewerPage() {
     } finally {
       setStatusUpdating(false);
     }
-  }, [draftStatus, data, handleDownloadPdf]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftStatus, data]);
 
   const updateContent = useCallback((key: string, value: string) => {
     setEditedContent((prev) => ({ ...prev, [key]: value }));
@@ -2194,6 +2198,10 @@ export default function DraftViewerPage() {
       setGeneratingPdf(false);
     }
   }, [data, getContent]);
+
+  // Keep the ref in sync so toggleSubmitted can call handleDownloadPdf
+  // even though it's declared before the function above.
+  handleDownloadPdfRef.current = handleDownloadPdf;
 
   if (!data || !data.draft) {
     return (
