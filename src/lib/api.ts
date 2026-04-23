@@ -531,7 +531,7 @@ export async function deleteDraft(draftId: string): Promise<{ success: boolean; 
 export async function updateDraftStatus(
   draftId: string,
   status: "draft" | "in_progress" | "ready_for_review" | "submitted",
-): Promise<{ success: boolean; status?: string; submitted_at?: string | null; error?: string }> {
+): Promise<{ success: boolean; status?: string; submitted_at?: string | null; error?: string; trello?: { card_id?: string; action?: string; success?: boolean } }> {
   const resp = await fetch(`${API_BASE}/drafts/${draftId}/status`, {
     method: "PATCH",
     headers: getAuthHeaders(),
