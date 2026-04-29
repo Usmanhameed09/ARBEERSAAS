@@ -742,11 +742,38 @@ export default function DraftViewerPage() {
           break;
         }
         case "regenerate_pricing": {
-          // Pricing regen is a heavier flow handled by the existing pricing
-          // engine UI — surface a hint to the user instead of silently no-op'ing.
-          alert(
-            "Pricing regeneration was proposed by the assistant. Open the CLIN Pricing section and use the existing pricing controls to re-run with the suggested target/tier.",
+          // Scale every CLIN line proportionally so the new grand total = target_bid.
+          // Recomputes amount = qty * newUnitPrice per row.
+          const targetBid = Number(change.target_bid || 0);
+          if (!targetBid || targetBid <= 0) {
+            alert("Pricing regeneration needs a target bid amount. Ask the assistant to specify one.");
+            break;
+          }
+          const currentRaw = getContent("clinData") || "";
+          const groups = parseClinData(currentRaw);
+          if (!groups || groups.length === 0) {
+            alert("Could not parse current CLIN data — open the CLIN Pricing section and try again.");
+            break;
+          }
+          const currentTotal = groups.reduce(
+            (sum, g) => sum + g.items.reduce((a, i) => a + (i.amount || (i.qty * i.unitPrice)), 0),
+            0,
           );
+          if (currentTotal <= 0) {
+            alert("Current CLIN total is zero — assign initial unit prices before scaling.");
+            break;
+          }
+          const factor = targetBid / currentTotal;
+          const scaled = groups.map((g) => ({
+            ...g,
+            items: g.items.map((i) => {
+              const newUnit = Math.round(i.unitPrice * factor * 100) / 100;
+              return { ...i, unitPrice: newUnit, amount: Math.round(i.qty * newUnit * 100) / 100 };
+            }),
+          }));
+          setEditedContent((prev) => ({ ...prev, clinData: JSON.stringify(scaled) }));
+          setSaveStatus("unsaved");
+          setTimeout(() => triggerSave(), 200);
           break;
         }
         default:
