@@ -5,9 +5,9 @@
  */
 
 import type { Opportunity } from "@/data/opportunities";
+import { API_BASE } from "@/lib/apiBase";
 
-export const API_BASE = "https://arberwebapp.arbernetwork.com/api";
-// export const API_BASE = "http://localhost:8000/api";
+export { API_BASE };
 
 function getAuthHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
@@ -420,6 +420,12 @@ export async function generateDraftV2(
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
       return { success: false, error: "Request timed out after 20 minutes. Please try again." };
+    }
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      return {
+        success: false,
+        error: "Draft generation could not reach the backend. If this keeps happening, the API gateway may be timing out before the draft finishes.",
+      };
     }
     console.error("[generateDraftV2] Fetch error:", err);
     return { success: false, error: `Network error: ${err instanceof Error ? err.message : String(err)}` };

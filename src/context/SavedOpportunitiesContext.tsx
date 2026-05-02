@@ -1,9 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
-
-const API_BASE = "https://arberwebapp.arbernetwork.com/api";
-// const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "@/lib/apiBase";
 const LOCAL_STORAGE_KEY = "arber_saved_opportunities";
 
 function getAuthHeaders(): Record<string, string> {

@@ -1,9 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-
-const API_BASE = "https://arberwebapp.arbernetwork.com/api";
-// const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "@/lib/apiBase";
 
 export interface AuthUser {
   id: string;

@@ -6,9 +6,7 @@
 import type { Opportunity } from "@/data/opportunities";
 import { jsPDF } from "jspdf";
 import { formatContractValue } from "@/lib/usaspending";
-
-const API_BASE = "https://arberwebapp.arbernetwork.com/api";
-// const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "@/lib/apiBase";
 
 interface AISummary {
   projectOverview: string;
