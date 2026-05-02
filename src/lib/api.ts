@@ -5,7 +5,7 @@
  */
 
 import type { Opportunity } from "@/data/opportunities";
-import { API_BASE } from "@/lib/apiBase";
+import { API_BASE, DIRECT_BACKEND_API_BASE } from "@/lib/apiBase";
 
 export { API_BASE };
 
@@ -400,7 +400,7 @@ export async function generateDraftV2(
     if (sectionsOverride && sectionsOverride.length > 0) {
       body.sectionsOverride = sectionsOverride;
     }
-    const resp = await fetch(`${API_BASE}/generate-draft-v2`, {
+    const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/generate-draft-v2`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
@@ -437,7 +437,7 @@ export async function generateDraft(opportunity: Opportunity, selectedPricing?: 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min timeout
   try {
-    const resp = await fetch(`${API_BASE}/generate-draft`, {
+    const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/generate-draft`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ opportunity, selectedPricing: selectedPricing || "recommended" }),
