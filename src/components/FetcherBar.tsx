@@ -69,6 +69,48 @@ const MIN_DAYS_OPTIONS = [
   { value: 60, label: "60 days" },
 ];
 
+function loadStoredFilters() {
+  if (typeof window === "undefined") {
+    return {
+      dateRange: "3months",
+      naicsCodes: [] as string[],
+      noticeTypes: ["k", "o", "p"],
+      setAside: "SBA",
+      minDaysUntilDue: 14,
+    };
+  }
+
+  try {
+    const saved = localStorage.getItem("arber_filters");
+    if (!saved) {
+      return {
+        dateRange: "3months",
+        naicsCodes: [] as string[],
+        noticeTypes: ["k", "o", "p"],
+        setAside: "SBA",
+        minDaysUntilDue: 14,
+      };
+    }
+
+    const parsed = JSON.parse(saved);
+    return {
+      dateRange: typeof parsed.dateRange === "string" && parsed.dateRange ? parsed.dateRange : "3months",
+      naicsCodes: Array.isArray(parsed.naicsCodes) ? parsed.naicsCodes.filter((code: unknown): code is string => typeof code === "string" && !!code.trim()) : [],
+      noticeTypes: Array.isArray(parsed.noticeTypes) && parsed.noticeTypes.length > 0 ? parsed.noticeTypes : ["k", "o", "p"],
+      setAside: typeof parsed.setAside === "string" && parsed.setAside ? parsed.setAside : "SBA",
+      minDaysUntilDue: typeof parsed.minDaysUntilDue === "number" ? parsed.minDaysUntilDue : 14,
+    };
+  } catch {
+    return {
+      dateRange: "3months",
+      naicsCodes: [] as string[],
+      noticeTypes: ["k", "o", "p"],
+      setAside: "SBA",
+      minDaysUntilDue: 14,
+    };
+  }
+}
+
 export default function FetcherBar({
   lastFetchTime,
   isScanning,
@@ -77,35 +119,25 @@ export default function FetcherBar({
   onScan,
   profileNaicsCodes,
 }: FetcherBarProps) {
-  const [showFilters, setShowFilters] = useState(true);
-  const [dateRange, setDateRange] = useState("3months");
-  const [selectedNaics, setSelectedNaics] = useState<string[]>([]);
-  const [selectedNoticeTypes, setSelectedNoticeTypes] = useState<string[]>(["k", "o", "p"]);
-  const [selectedSetAside, setSelectedSetAside] = useState("");
-  const [minDaysUntilDue, setMinDaysUntilDue] = useState(14);
-  const initializedRef = useRef(false);
+  const storedFilters = loadStoredFilters();
+  const normalizedProfileNaics = (profileNaicsCodes || []).map((code) => code.trim()).filter(Boolean);
+  const initialNaics = normalizedProfileNaics.length > 0 ? normalizedProfileNaics : storedFilters.naicsCodes;
 
-  // Load saved filters from localStorage on mount
+  const [showFilters, setShowFilters] = useState(true);
+  const [dateRange, setDateRange] = useState(storedFilters.dateRange);
+  const [selectedNaics, setSelectedNaics] = useState<string[]>(initialNaics);
+  const [selectedNoticeTypes, setSelectedNoticeTypes] = useState<string[]>(storedFilters.noticeTypes);
+  const [selectedSetAside, setSelectedSetAside] = useState(storedFilters.setAside);
+  const [minDaysUntilDue, setMinDaysUntilDue] = useState(storedFilters.minDaysUntilDue);
+  const hydratedRef = useRef(false);
+
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("arber_filters");
-      if (saved) {
-        const f = JSON.parse(saved);
-        if (f.dateRange) setDateRange(f.dateRange);
-        if (f.naicsCodes?.length > 0) {
-          setSelectedNaics(f.naicsCodes);
-          initializedRef.current = true;
-        }
-        if (f.noticeTypes?.length > 0) setSelectedNoticeTypes(f.noticeTypes);
-        if (f.setAside !== undefined) setSelectedSetAside(f.setAside);
-        if (f.minDaysUntilDue !== undefined) setMinDaysUntilDue(f.minDaysUntilDue);
-      }
-    } catch { /* ignore */ }
+    hydratedRef.current = true;
   }, []);
 
   // Save filters to localStorage whenever they change
   useEffect(() => {
-    if (!initializedRef.current) return;
+    if (!hydratedRef.current) return;
     try {
       localStorage.setItem("arber_filters", JSON.stringify({
         dateRange,
@@ -116,14 +148,6 @@ export default function FetcherBar({
       }));
     } catch { /* ignore */ }
   }, [dateRange, selectedNaics, selectedNoticeTypes, selectedSetAside, minDaysUntilDue]);
-
-  // Load profile NAICS codes as defaults (once only, if no saved filters)
-  useEffect(() => {
-    if (!initializedRef.current && profileNaicsCodes && profileNaicsCodes.length > 0) {
-      setSelectedNaics(profileNaicsCodes);
-      initializedRef.current = true;
-    }
-  }, [profileNaicsCodes]);
 
   // Merge profile NAICS codes into the display list
   const allNaicsCodes = (() => {
@@ -377,7 +401,7 @@ export default function FetcherBar({
                 ))}
               </select>
               <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5">
-                Default: All types. Select to filter small business set-asides.
+                Default: Total Small Business Set-Aside.
               </p>
             </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, Radar, Archive, Trash2 } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
@@ -50,7 +50,10 @@ function OpportunitiesContent() {
   const lastScanOptionsRef = useRef<FetchOptions | null>(null);
 
   const userId = user?.id ?? null;
-  const profileNaicsCodes = companyProfile?.naicsCodes || [];
+  const profileNaicsCodes = useMemo(
+    () => companyProfile?.naicsCodes || [],
+    [companyProfile?.naicsCodes]
+  );
 
   useEffect(() => {
     const urlSearch = searchParams.get("search") || "";
@@ -346,6 +349,7 @@ function OpportunitiesContent() {
 
       {/* Fetcher Bar */}
       <FetcherBar
+        key={`fetcher-${profileNaicsCodes.join(",") || "none"}`}
         lastFetchTime={lastFetchTime}
         isScanning={isScanning}
         isAnalyzing={isAnalyzing}
