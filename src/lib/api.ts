@@ -841,3 +841,349 @@ export async function* streamDraftChat(payload: {
     }
   }
 }
+
+// ============================================================================
+// SUBCONTRACTORS — discovery + CRUD
+// ============================================================================
+
+export interface SubcontractorRecord {
+  id: string;
+  company: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  website?: string | null;
+  addressLine?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  source: "manual" | "usaspending_subaward" | "usaspending_prime" | "sam" | "google_places";
+  uei?: string | null;
+  cage?: string | null;
+  naicsCodes?: string[];
+  certifications?: string[];
+  businessType?: string | null;
+  samRegistered?: boolean | null;
+  pastFederalAwardCount?: number;
+  pastFederalAwardTotal?: number;
+  lastFederalAwardDate?: string | null;
+  trades?: string[];
+  serviceRadiusMi?: number;
+  insuranceStatus?: "verified" | "pending" | "expired" | "unknown";
+  insuranceExpiresOn?: string | null;
+  responseScore?: number;
+  lastRespondedAt?: string | null;
+  timesEmailed?: number;
+  timesReplied?: number;
+  timesQuoted?: number;
+  preferred?: boolean;
+  notes?: string | null;
+  unsubscribed?: boolean;
+  bounced?: boolean;
+}
+
+export interface DiscoveredSubItem {
+  company: string;
+  source: "usaspending_subaward" | "usaspending_prime" | "sam" | "google_places";
+  source_external_id?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  address_line?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  uei?: string | null;
+  cage?: string | null;
+  naics_codes?: string[];
+  certifications?: string[];
+  business_type?: string | null;
+  sam_registered?: boolean | null;
+  past_federal_award_count?: number;
+  past_federal_award_total?: number;
+  last_federal_award_date?: string | null;
+  discovery_payload?: Record<string, unknown>;
+  relevance_score?: number;
+  alreadyInNetwork?: boolean;
+}
+
+export interface DiscoverResponse {
+  success: boolean;
+  error?: string;
+  subawards?: DiscoveredSubItem[];
+  primes?: DiscoveredSubItem[];
+  sam?: DiscoveredSubItem[];
+  places?: DiscoveredSubItem[];
+  merged?: DiscoveredSubItem[];
+}
+
+export async function listSubcontractors(): Promise<SubcontractorRecord[]> {
+  const resp = await fetch(`${API_BASE}/subcontractors`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return (data.subcontractors as SubcontractorRecord[]) || [];
+}
+
+export async function createSubcontractor(payload: Partial<SubcontractorRecord>): Promise<SubcontractorRecord | null> {
+  const resp = await fetch(`${API_BASE}/subcontractors`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json();
+  return data.success ? data.subcontractor : null;
+}
+
+export async function updateSubcontractor(id: string, patch: Partial<SubcontractorRecord>): Promise<SubcontractorRecord | null> {
+  const resp = await fetch(`${API_BASE}/subcontractors/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(patch),
+  });
+  const data = await resp.json();
+  return data.success ? data.subcontractor : null;
+}
+
+export async function deleteSubcontractor(id: string): Promise<boolean> {
+  const resp = await fetch(`${API_BASE}/subcontractors/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await resp.json();
+  return Boolean(data.success);
+}
+
+export interface DiscoverParams {
+  naicsCodes: string[];
+  state: string;
+  city?: string;
+  tradeKeyword?: string;
+  monthsBack?: number;
+}
+
+export async function discoverSubcontractors(params: DiscoverParams): Promise<DiscoverResponse> {
+  const resp = await fetch(`${API_BASE}/subcontractors/discover`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(params),
+  });
+  return (await resp.json()) as DiscoverResponse;
+}
+
+export async function saveDiscoveredSubs(items: DiscoveredSubItem[]): Promise<{ savedCount: number; skippedDuplicates: number } | null> {
+  const resp = await fetch(`${API_BASE}/subcontractors/save-batch`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ items }),
+  });
+  const data = await resp.json();
+  return data.success ? { savedCount: data.savedCount || 0, skippedDuplicates: data.skippedDuplicates || 0 } : null;
+}
+
+// ============================================================================
+// OUTREACH — settings + campaigns
+// ============================================================================
+
+export interface OutreachSettings {
+  senderName?: string | null;
+  senderEmail?: string | null;
+  senderPhone?: string | null;
+  senderTitle?: string | null;
+  senderSignature?: string | null;
+  sendgridVerifiedSender?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpUsername?: string | null;
+  imapHost?: string | null;
+  imapPort?: number | null;
+  imapUsername?: string | null;
+  alwaysPreviewFirst?: boolean;
+  dailySendCap?: number;
+  step2DelayDays?: number;
+  step3DelayDays?: number;
+  // Booleans indicating whether the encrypted secret is set (we never expose values)
+  sendgrid_api_keySet?: boolean;
+  smtp_passwordSet?: boolean;
+  imap_passwordSet?: boolean;
+  google_places_api_keySet?: boolean;
+}
+
+export type OutreachSettingsInput = Partial<OutreachSettings> & {
+  // Plain-text fields used only when changing a secret. Send empty/undefined to leave unchanged.
+  sendgrid_api_key?: string;
+  smtp_password?: string;
+  imap_password?: string;
+  google_places_api_key?: string;
+};
+
+export async function getOutreachSettings(): Promise<OutreachSettings> {
+  const resp = await fetch(`${API_BASE}/outreach/settings`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return (data.settings || {}) as OutreachSettings;
+}
+
+export async function updateOutreachSettings(patch: OutreachSettingsInput): Promise<boolean> {
+  const resp = await fetch(`${API_BASE}/outreach/settings`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(patch),
+  });
+  const data = await resp.json();
+  return Boolean(data.success);
+}
+
+export async function outreachTestSend(to: string): Promise<{ ok: boolean; provider?: string; error?: string }> {
+  const resp = await fetch(`${API_BASE}/outreach/test-send`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ to }),
+  });
+  const data = await resp.json();
+  return { ok: Boolean(data.success), provider: data.provider, error: data.error };
+}
+
+export interface OutreachCampaign {
+  id: string;
+  draftId?: string | null;
+  opportunityNoticeId?: string | null;
+  opportunityTitle?: string | null;
+  opportunityAgency?: string | null;
+  status: "draft" | "pending_approval" | "active" | "paused" | "closed";
+  closedReason?: string | null;
+  requiresApproval?: boolean;
+  approvedAt?: string | null;
+  scopeSummary?: string | null;
+  tradeRequired?: string | null;
+  locationCity?: string | null;
+  locationState?: string | null;
+  deadlineDate?: string | null;
+  naicsCode?: string | null;
+  step2DelayDays?: number;
+  step3DelayDays?: number;
+  createdAt?: string;
+  closedAt?: string | null;
+}
+
+export interface CampaignRecipient {
+  id: string;
+  campaignId: string;
+  subcontractorId: string;
+  status: string;
+  replyClassification?: string | null;
+  replyExcerpt?: string | null;
+  repliedAt?: string | null;
+  currentStep?: number | null;
+  nextSendAt?: string | null;
+  personalNote?: string | null;
+}
+
+export interface CampaignDetailResponse {
+  success: boolean;
+  campaign: OutreachCampaign;
+  recipients: CampaignRecipient[];
+  subcontractors: Record<string, SubcontractorRecord>;
+  emails: Array<{
+    id: string;
+    recipient_id: string;
+    step: number;
+    subject: string;
+    sent_at: string;
+    opened_at?: string | null;
+    bounced_at?: string | null;
+    provider: string;
+  }>;
+}
+
+export async function listCampaigns(): Promise<OutreachCampaign[]> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return (data.campaigns as OutreachCampaign[]) || [];
+}
+
+export async function getCampaign(id: string): Promise<CampaignDetailResponse | null> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns/${id}`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return data.success ? (data as CampaignDetailResponse) : null;
+}
+
+export interface CampaignCreateInput {
+  draftId?: string;
+  opportunityNoticeId?: string;
+  opportunityTitle?: string;
+  opportunityAgency?: string;
+  scopeSummary?: string;
+  tradeRequired?: string;
+  locationCity?: string;
+  locationState?: string;
+  deadlineDate?: string;
+  naicsCode?: string;
+  step2DelayDays?: number;
+  step3DelayDays?: number;
+}
+
+export async function createCampaign(input: CampaignCreateInput): Promise<OutreachCampaign | null> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input),
+  });
+  const data = await resp.json();
+  return data.success ? (data.campaign as OutreachCampaign) : null;
+}
+
+export interface MatchedSub extends SubcontractorRecord {
+  matchScore: number;
+  matchReasons: string[];
+}
+
+export async function matchCampaignSubs(campaignId: string, limit = 25): Promise<MatchedSub[]> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns/${campaignId}/match`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ limit }),
+  });
+  const data = await resp.json();
+  return data.success ? (data.matches as MatchedSub[]) : [];
+}
+
+export async function setCampaignRecipients(campaignId: string, subcontractorIds: string[]): Promise<number> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns/${campaignId}/recipients`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ subcontractorIds }),
+  });
+  const data = await resp.json();
+  return data.success ? (data.count || 0) : 0;
+}
+
+export interface LaunchCampaignResult {
+  success: boolean;
+  status: "active" | "pending_approval";
+  reasons?: string[];
+  previewStep1?: { subject: string; body: string; to: string; company: string };
+  recipientCount?: number;
+  sent?: number;
+  skippedNoEmail?: number;
+  failed?: number;
+  error?: string;
+}
+
+export async function launchCampaign(campaignId: string, opts?: { bypassApproval?: boolean; predictedBid?: number }): Promise<LaunchCampaignResult> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns/${campaignId}/launch`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(opts || {}),
+  });
+  const data = await resp.json();
+  return data as LaunchCampaignResult;
+}
+
+export async function closeCampaign(campaignId: string, reason = "manual"): Promise<boolean> {
+  const resp = await fetch(`${API_BASE}/outreach/campaigns/${campaignId}/close`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ reason }),
+  });
+  const data = await resp.json();
+  return Boolean(data.success);
+}

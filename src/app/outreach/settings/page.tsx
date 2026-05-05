@@ -1,369 +1,296 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Mail,
-  PhoneCall,
-  Shield,
-  Eye,
-  EyeOff,
-  Save,
-  TestTube,
-  Wifi,
-  WifiOff,
-  Bot,
-  Clock,
-  RotateCcw,
-  MessageSquareText,
-  Sparkles,
-  Info,
+  Mail, Eye, EyeOff, Save, Send, Loader2, CheckCircle2, AlertCircle, Info,
+  Compass, Settings as SettingsIcon, Key,
 } from "lucide-react";
+import {
+  getOutreachSettings, updateOutreachSettings, outreachTestSend,
+  type OutreachSettings, type OutreachSettingsInput,
+} from "@/lib/api";
 
-const defaultPrompt = `You are an AI outreach agent for ARBER Gov Bid Automation. You are calling subcontractors on behalf of a prime contractor to discuss a government contract opportunity.
-
-Your goal on this call:
-1. Introduce yourself and the company
-2. Briefly summarize the contract opportunity (title, agency, scope, timeline)
-3. Ask if they have capacity and interest to participate as a subcontractor
-4. Let them know a detailed email with the full RFP, scope of work, and attached documents has been sent to their email
-5. Request they review the email and submit their pricing quote by the deadline
-6. Thank them for their time
-
-Tone: Professional, concise, and respectful of their time. Do not be pushy. If they decline or are unavailable, thank them and note the outcome.
-
-You will receive the following data for each call:
-- Contract title, agency, and summary
-- Subcontractor name, company, and trade
-- Due date for pricing response
-- Key requirements relevant to their trade`;
+const PASSWORD_MASK = "••••••••";
 
 export default function OutreachSettingsPage() {
-  const [emailForm, setEmailForm] = useState({
-    imapServer: "",
-    imapPort: "993",
-    smtpServer: "",
-    smtpPort: "587",
-    email: "",
-    password: "",
-    senderName: "",
-  });
+  const [settings, setSettings] = useState<OutreachSettings>({});
+  const [form, setForm] = useState<OutreachSettingsInput>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [savedAt, setSavedAt] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; provider?: string; error?: string } | null>(null);
+  const [showSecrets, setShowSecrets] = useState({ sendgrid: false, smtp: false, imap: false, places: false });
 
-  const [vapiForm, setVapiForm] = useState({
-    apiKey: "",
-    agentName: "ARBER Contractor Outreach Agent",
-    preferredCallTime: "10:00",
-    preferredCallEndTime: "17:00",
-    maxCallbacks: "2",
-    callbackInterval: "24",
-  });
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await getOutreachSettings();
+      setSettings(s);
+      setForm({
+        senderName: s.senderName || "",
+        senderEmail: s.senderEmail || "",
+        senderPhone: s.senderPhone || "",
+        senderTitle: s.senderTitle || "",
+        senderSignature: s.senderSignature || "",
+        sendgridVerifiedSender: s.sendgridVerifiedSender || "",
+        smtpHost: s.smtpHost || "",
+        smtpPort: s.smtpPort || 587,
+        smtpUsername: s.smtpUsername || "",
+        imapHost: s.imapHost || "",
+        imapPort: s.imapPort || 993,
+        imapUsername: s.imapUsername || "",
+        alwaysPreviewFirst: s.alwaysPreviewFirst || false,
+        dailySendCap: s.dailySendCap || 50,
+        step2DelayDays: s.step2DelayDays ?? 3,
+        step3DelayDays: s.step3DelayDays ?? 6,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load settings");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const [agentPrompt, setAgentPrompt] = useState(defaultPrompt);
+  useEffect(() => { refresh(); }, [refresh]);
 
-  const [emailConnected, setEmailConnected] = useState(false);
-  const [vapiConnected, setVapiConnected] = useState(false);
-  const [showEmailPassword, setShowEmailPassword] = useState(false);
-  const [showVapiKey, setShowVapiKey] = useState(false);
-  const [emailTesting, setEmailTesting] = useState(false);
-  const [vapiTesting, setVapiTesting] = useState(false);
+  const update = (k: keyof OutreachSettingsInput, v: unknown) => setForm((p) => ({ ...p, [k]: v as never }));
 
-  const handleTestEmail = () => {
-    setEmailTesting(true);
-    setTimeout(() => {
-      setEmailTesting(false);
-      setEmailConnected(true);
-    }, 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const ok = await updateOutreachSettings(form);
+      if (!ok) throw new Error("Save failed");
+      setSavedAt(Date.now());
+      // Re-fetch to refresh secret-set indicators
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleTestVapi = () => {
-    setVapiTesting(true);
-    setTimeout(() => {
-      setVapiTesting(false);
-      setVapiConnected(true);
-    }, 2000);
+  const handleTestSend = async () => {
+    if (!testTo) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await outreachTestSend(testTo);
+      setTestResult(r);
+    } catch (e) {
+      setTestResult({ ok: false, error: e instanceof Error ? e.message : "Test failed" });
+    } finally {
+      setTesting(false);
+    }
   };
 
-  const inputClass = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400";
-  const labelClass = "block text-[11px] font-semibold text-gray-500 uppercase mb-1";
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400";
+  const labelCls = "block text-[11px] font-semibold text-gray-500 uppercase mb-1";
+
+  if (loading) {
+    return (
+      <div className="p-5"><div className="bg-white p-8 rounded-xl border text-center text-sm text-slate-500"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" /> Loading settings…</div></div>
+    );
+  }
 
   return (
     <div className="p-3 sm:p-5 max-w-4xl">
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-gray-900">Outreach Settings</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Configure email and VAPI voice AI for automated contractor outreach
-        </p>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Outreach Settings</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Configure email sending (SendGrid OR your own SMTP), reply detection (IMAP), and discovery (Google Places).
+          </p>
+        </div>
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg disabled:opacity-50">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save All
+        </button>
       </div>
 
-      <div className="space-y-6">
-        {/* Email IMAP/SMTP Configuration */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${emailConnected ? "bg-green-50" : "bg-gray-50"}`}>
-                <Mail className={`w-5 h-5 ${emailConnected ? "text-green-600" : "text-gray-400"}`} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Email Configuration</h2>
-                <p className="text-xs text-gray-400">IMAP & SMTP settings for sending outreach emails</p>
-              </div>
-            </div>
-            {emailConnected ? (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 rounded-full text-[11px] font-semibold">
-                <Wifi className="w-3.5 h-3.5" />
-                Connected
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[11px] font-semibold">
-                <WifiOff className="w-3.5 h-3.5" />
-                Not Connected
-              </span>
-            )}
-          </div>
-
-          <div className="p-4 sm:p-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>IMAP Server *</label>
-                <input value={emailForm.imapServer} onChange={(e) => setEmailForm({ ...emailForm, imapServer: e.target.value })} placeholder="imap.gmail.com" className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>IMAP Port</label>
-                <input value={emailForm.imapPort} onChange={(e) => setEmailForm({ ...emailForm, imapPort: e.target.value })} placeholder="993" className={inputClass} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>SMTP Server *</label>
-                <input value={emailForm.smtpServer} onChange={(e) => setEmailForm({ ...emailForm, smtpServer: e.target.value })} placeholder="smtp.gmail.com" className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>SMTP Port</label>
-                <input value={emailForm.smtpPort} onChange={(e) => setEmailForm({ ...emailForm, smtpPort: e.target.value })} placeholder="587" className={inputClass} />
-              </div>
-            </div>
-            <div>
-              <label className={labelClass}>Sender Name</label>
-              <input value={emailForm.senderName} onChange={(e) => setEmailForm({ ...emailForm, senderName: e.target.value })} placeholder="ARBER Bid Automation" className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Email Address *</label>
-              <input type="email" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} placeholder="outreach@yourcompany.com" className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Password / App Password *</label>
-              <div className="relative">
-                <input type={showEmailPassword ? "text" : "password"} value={emailForm.password} onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })} placeholder="Enter app password" className={`${inputClass} pr-10`} />
-                <button type="button" onClick={() => setShowEmailPassword(!showEmailPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showEmailPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">For Gmail, use an App Password from your Google Account security settings</p>
-            </div>
-            <div className="flex items-center gap-3 pt-2">
-              <button onClick={handleTestEmail} disabled={emailTesting} className="flex items-center gap-1.5 px-4 py-2 bg-[#1e2a3a] hover:bg-[#2a3a4e] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50">
-                <TestTube className="w-3.5 h-3.5" />
-                {emailTesting ? "Testing Connection..." : "Test Connection"}
-              </button>
-              <button className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors">
-                <Save className="w-3.5 h-3.5" />
-                Save Email Settings
-              </button>
-            </div>
-          </div>
+      {savedAt > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg p-2 mb-3 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" /> Settings saved.
         </div>
+      )}
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg p-2 mb-3 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" /> {error}
+        </div>
+      )}
 
-        {/* VAPI Voice Agent Configuration */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${vapiConnected ? "bg-green-50" : "bg-gray-50"}`}>
-                <PhoneCall className={`w-5 h-5 ${vapiConnected ? "text-green-600" : "text-gray-400"}`} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">VAPI Voice Agent</h2>
-                <p className="text-xs text-gray-400">Configure the AI calling agent for contractor outreach</p>
-              </div>
-            </div>
-            {vapiConnected ? (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 rounded-full text-[11px] font-semibold">
-                <Wifi className="w-3.5 h-3.5" />
-                Connected
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[11px] font-semibold">
-                <WifiOff className="w-3.5 h-3.5" />
-                Not Connected
-              </span>
-            )}
+      <div className="space-y-5">
+        {/* SENDER IDENTITY */}
+        <Section title="Sender Identity" icon={<Mail className="w-4 h-4" />} description="How recipients see your email — From name, reply-to address, and signature.">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Sender name *">
+              <input className={inputCls} value={form.senderName || ""} onChange={(e) => update("senderName", e.target.value)} placeholder="Arthur Beda" />
+            </Field>
+            <Field label="Sender email * (replies land here)">
+              <input className={inputCls} value={form.senderEmail || ""} onChange={(e) => update("senderEmail", e.target.value)} placeholder="arthur.b@arbernetwork.com" />
+            </Field>
+            <Field label="Phone (in signature)">
+              <input className={inputCls} value={form.senderPhone || ""} onChange={(e) => update("senderPhone", e.target.value)} />
+            </Field>
+            <Field label="Title">
+              <input className={inputCls} value={form.senderTitle || ""} onChange={(e) => update("senderTitle", e.target.value)} placeholder="Managing Member" />
+            </Field>
+            <Field label="Company / signature line" full>
+              <input className={inputCls} value={form.senderSignature || ""} onChange={(e) => update("senderSignature", e.target.value)} placeholder="ARBER LLC" />
+            </Field>
           </div>
+        </Section>
 
-          <div className="p-4 sm:p-6 space-y-5">
-            {/* API Key */}
-            <div>
-              <label className={labelClass}>VAPI API Key *</label>
+        {/* SENDGRID */}
+        <Section title="SendGrid (recommended for sending)" icon={<Send className="w-4 h-4" />} description="Free tier: 100 emails/day. Sign up at sendgrid.com → Sender Authentication → verify your sender email → API Keys → create one with Mail Send permission.">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="SendGrid API key" full>
               <div className="relative">
-                <input type={showVapiKey ? "text" : "password"} value={vapiForm.apiKey} onChange={(e) => setVapiForm({ ...vapiForm, apiKey: e.target.value })} placeholder="vapi_xxxxxxxxxxxxxxxxxxxxxxxx" className={`${inputClass} pr-10`} />
-                <button type="button" onClick={() => setShowVapiKey(!showVapiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showVapiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <input
+                  type={showSecrets.sendgrid ? "text" : "password"}
+                  className={inputCls}
+                  value={form.sendgrid_api_key || ""}
+                  onChange={(e) => update("sendgrid_api_key", e.target.value)}
+                  placeholder={settings.sendgrid_api_keySet ? PASSWORD_MASK : "SG..."}
+                />
+                <button type="button" onClick={() => setShowSecrets((p) => ({ ...p, sendgrid: !p.sendgrid }))} className="absolute right-2 top-2 text-gray-400 hover:text-gray-700">
+                  {showSecrets.sendgrid ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1">Your VAPI account API key to connect the calling agent</p>
-            </div>
+              {settings.sendgrid_api_keySet && <p className="text-[10px] text-emerald-700 mt-1">✓ Key set. Leave blank to keep current.</p>}
+            </Field>
+            <Field label="Verified sender email (must match SendGrid)" full>
+              <input className={inputCls} value={form.sendgridVerifiedSender || ""} onChange={(e) => update("sendgridVerifiedSender", e.target.value)} placeholder="same as Sender email above (or different verified sender)" />
+            </Field>
+          </div>
+        </Section>
 
-            {/* Agent Name */}
-            <div>
-              <label className={labelClass}>
-                <span className="flex items-center gap-1.5">
-                  <Bot className="w-3 h-3" />
-                  Agent Name *
-                </span>
-              </label>
-              <input value={vapiForm.agentName} onChange={(e) => setVapiForm({ ...vapiForm, agentName: e.target.value })} placeholder="My Outreach Agent" className={inputClass} />
-              <p className="text-[10px] text-gray-400 mt-1">This name identifies your agent in VAPI and call logs</p>
-            </div>
-
-            {/* Call Scheduling */}
-            <div className="bg-slate-50 rounded-xl p-5 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-gray-800">Call Scheduling</h3>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Preferred Call Start Time</label>
-                  <input type="time" value={vapiForm.preferredCallTime} onChange={(e) => setVapiForm({ ...vapiForm, preferredCallTime: e.target.value })} className={inputClass} />
-                  <p className="text-[10px] text-gray-400 mt-1">Earliest time to start calling contractors</p>
-                </div>
-                <div>
-                  <label className={labelClass}>Preferred Call End Time</label>
-                  <input type="time" value={vapiForm.preferredCallEndTime} onChange={(e) => setVapiForm({ ...vapiForm, preferredCallEndTime: e.target.value })} className={inputClass} />
-                  <p className="text-[10px] text-gray-400 mt-1">Latest time to make calls</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Callback Settings */}
-            <div className="bg-slate-50 rounded-xl p-5 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <RotateCcw className="w-4 h-4 text-amber-600" />
-                <h3 className="text-xs font-bold text-gray-800">Callback Settings</h3>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Max Callbacks (if no answer / voicemail)</label>
-                  <select value={vapiForm.maxCallbacks} onChange={(e) => setVapiForm({ ...vapiForm, maxCallbacks: e.target.value })} className={inputClass}>
-                    <option value="0">No callbacks</option>
-                    <option value="1">1 callback</option>
-                    <option value="2">2 callbacks</option>
-                    <option value="3">3 callbacks</option>
-                    <option value="5">5 callbacks</option>
-                  </select>
-                  <p className="text-[10px] text-gray-400 mt-1">How many times to retry if contractor doesn&apos;t answer</p>
-                </div>
-                <div>
-                  <label className={labelClass}>Callback Interval (hours)</label>
-                  <select value={vapiForm.callbackInterval} onChange={(e) => setVapiForm({ ...vapiForm, callbackInterval: e.target.value })} className={inputClass}>
-                    <option value="4">Every 4 hours</option>
-                    <option value="8">Every 8 hours</option>
-                    <option value="12">Every 12 hours</option>
-                    <option value="24">Every 24 hours</option>
-                    <option value="48">Every 48 hours</option>
-                  </select>
-                  <p className="text-[10px] text-gray-400 mt-1">Wait time between callback attempts</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Agent Prompt */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 uppercase">
-                  <MessageSquareText className="w-3 h-3" />
-                  Agent Prompt / Instructions
-                </label>
-                <button
-                  onClick={() => setAgentPrompt(defaultPrompt)}
-                  className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  Reset to Default
+        {/* SMTP FALLBACK */}
+        <Section title="SMTP (alternative or fallback)" icon={<Mail className="w-4 h-4" />} description="Use your own email account (Gmail/Outlook/O365) to send if not using SendGrid. For Gmail: enable 2FA + create App Password.">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="SMTP host"><input className={inputCls} value={form.smtpHost || ""} onChange={(e) => update("smtpHost", e.target.value)} placeholder="smtp.gmail.com" /></Field>
+            <Field label="SMTP port"><input type="number" className={inputCls} value={form.smtpPort ?? 587} onChange={(e) => update("smtpPort", parseInt(e.target.value) || 587)} /></Field>
+            <Field label="SMTP username"><input className={inputCls} value={form.smtpUsername || ""} onChange={(e) => update("smtpUsername", e.target.value)} placeholder="your-email@gmail.com" /></Field>
+            <Field label="SMTP password / app password">
+              <div className="relative">
+                <input
+                  type={showSecrets.smtp ? "text" : "password"}
+                  className={inputCls}
+                  value={form.smtp_password || ""}
+                  onChange={(e) => update("smtp_password", e.target.value)}
+                  placeholder={settings.smtp_passwordSet ? PASSWORD_MASK : ""}
+                />
+                <button type="button" onClick={() => setShowSecrets((p) => ({ ...p, smtp: !p.smtp }))} className="absolute right-2 top-2 text-gray-400 hover:text-gray-700">
+                  {showSecrets.smtp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <textarea
-                rows={14}
-                value={agentPrompt}
-                onChange={(e) => setAgentPrompt(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-xs leading-relaxed font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-y"
+              {settings.smtp_passwordSet && <p className="text-[10px] text-emerald-700 mt-1">✓ Password set. Leave blank to keep current.</p>}
+            </Field>
+          </div>
+        </Section>
+
+        {/* IMAP for replies */}
+        <Section title="IMAP (read replies)" icon={<Mail className="w-4 h-4" />} description="The poller checks this inbox every 5 minutes for replies to outreach emails. Usually same account as SMTP.">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="IMAP host"><input className={inputCls} value={form.imapHost || ""} onChange={(e) => update("imapHost", e.target.value)} placeholder="imap.gmail.com" /></Field>
+            <Field label="IMAP port"><input type="number" className={inputCls} value={form.imapPort ?? 993} onChange={(e) => update("imapPort", parseInt(e.target.value) || 993)} /></Field>
+            <Field label="IMAP username"><input className={inputCls} value={form.imapUsername || ""} onChange={(e) => update("imapUsername", e.target.value)} placeholder="your-email@gmail.com" /></Field>
+            <Field label="IMAP password / app password">
+              <div className="relative">
+                <input
+                  type={showSecrets.imap ? "text" : "password"}
+                  className={inputCls}
+                  value={form.imap_password || ""}
+                  onChange={(e) => update("imap_password", e.target.value)}
+                  placeholder={settings.imap_passwordSet ? PASSWORD_MASK : ""}
+                />
+                <button type="button" onClick={() => setShowSecrets((p) => ({ ...p, imap: !p.imap }))} className="absolute right-2 top-2 text-gray-400 hover:text-gray-700">
+                  {showSecrets.imap ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {settings.imap_passwordSet && <p className="text-[10px] text-emerald-700 mt-1">✓ Password set. Leave blank to keep current.</p>}
+            </Field>
+          </div>
+        </Section>
+
+        {/* GOOGLE PLACES */}
+        <Section title="Google Places API" icon={<Compass className="w-4 h-4" />} description="Optional — for finding LOCAL businesses in subcontractor discovery (lawn care, janitorial, etc.). Free $200/month credit from Google. Get key at console.cloud.google.com → enable Places API.">
+          <Field label="Google Places API key" full>
+            <div className="relative">
+              <input
+                type={showSecrets.places ? "text" : "password"}
+                className={inputCls}
+                value={form.google_places_api_key || ""}
+                onChange={(e) => update("google_places_api_key", e.target.value)}
+                placeholder={settings.google_places_api_keySet ? PASSWORD_MASK : "AIza..."}
               />
-              <div className="mt-2 bg-blue-50 rounded-lg p-3 flex items-start gap-2">
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-700 leading-relaxed">
-                  This prompt tells the AI agent how to behave on calls. The agent automatically receives contract details (title, agency, scope, deadline) and contractor info (name, company, trade) for each call. Edit the prompt to match your communication style and requirements.
-                </p>
-              </div>
-            </div>
-
-            {/* How it works */}
-            <div className="bg-emerald-50 rounded-lg p-3 text-xs text-emerald-700">
-              <div className="flex items-start gap-2">
-                <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold mb-0.5">How it works</p>
-                  <p className="text-emerald-600 leading-relaxed">
-                    When a pipeline is started, the agent calls each available contractor during your preferred hours,
-                    summarizes the opportunity, directs them to check their email for the full RFP and documents,
-                    and requests a pricing quote. If no answer, it retries based on your callback settings.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button onClick={handleTestVapi} disabled={vapiTesting} className="flex items-center gap-1.5 px-4 py-2 bg-[#1e2a3a] hover:bg-[#2a3a4e] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50">
-                <TestTube className="w-3.5 h-3.5" />
-                {vapiTesting ? "Testing Connection..." : "Test VAPI Connection"}
-              </button>
-              <button className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors">
-                <Save className="w-3.5 h-3.5" />
-                Save Agent Settings
+              <button type="button" onClick={() => setShowSecrets((p) => ({ ...p, places: !p.places }))} className="absolute right-2 top-2 text-gray-400 hover:text-gray-700">
+                {showSecrets.places ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-          </div>
-        </div>
+            {settings.google_places_api_keySet && <p className="text-[10px] text-emerald-700 mt-1">✓ Key set.</p>}
+          </Field>
+        </Section>
 
-        {/* Outreach Behavior */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-gray-900">Outreach Behavior</h2>
-            <p className="text-xs text-gray-400">Configure how the AI agent handles contractor outreach</p>
+        {/* CAMPAIGN BEHAVIOR */}
+        <Section title="Campaign Behavior" icon={<SettingsIcon className="w-4 h-4" />} description="Step delays and approval thresholds.">
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Step 2 delay (days)"><input type="number" className={inputCls} value={form.step2DelayDays ?? 3} onChange={(e) => update("step2DelayDays", parseInt(e.target.value) || 3)} /></Field>
+            <Field label="Step 3 delay (days)"><input type="number" className={inputCls} value={form.step3DelayDays ?? 6} onChange={(e) => update("step3DelayDays", parseInt(e.target.value) || 6)} /></Field>
+            <Field label="Daily send cap"><input type="number" className={inputCls} value={form.dailySendCap ?? 50} onChange={(e) => update("dailySendCap", parseInt(e.target.value) || 50)} /></Field>
+            <Field label="Always require approval before sending" full>
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                <input type="checkbox" checked={!!form.alwaysPreviewFirst} onChange={(e) => update("alwaysPreviewFirst", e.target.checked)} />
+                If on, every campaign requires you to preview Step 1 before launching, regardless of AI heuristic.
+              </label>
+            </Field>
           </div>
-          <div className="p-4 sm:p-6 space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
-              <div>
-                <span className="text-xs font-medium text-gray-800">Auto-call preferred contractors</span>
-                <p className="text-[10px] text-gray-400">Automatically call preferred contractors when a pipeline is started</p>
-              </div>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
-              <div>
-                <span className="text-xs font-medium text-gray-800">Send follow-up email after call</span>
-                <p className="text-[10px] text-gray-400">Automatically send an email with full RFP details after each call</p>
-              </div>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
-              <div>
-                <span className="text-xs font-medium text-gray-800">Only contact insurance-verified contractors</span>
-                <p className="text-[10px] text-gray-400">Skip contractors with Pending or Expired insurance status</p>
-              </div>
-            </label>
+        </Section>
+
+        {/* TEST SEND */}
+        <Section title="Test Email Send" icon={<Send className="w-4 h-4" />} description="Send a test email to verify your SendGrid or SMTP credentials are working.">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Field label="Send test to (email address)">
+                <input className={inputCls} value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="your-email@example.com" />
+              </Field>
+            </div>
+            <button onClick={handleTestSend} disabled={testing || !testTo} className="flex items-center gap-1 px-3 py-2 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white">
+              {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send test
+            </button>
           </div>
-        </div>
+          {testResult && (
+            <div className={`mt-2 text-xs p-2 rounded ${testResult.ok ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"}`}>
+              {testResult.ok ? `✓ Sent successfully via ${testResult.provider || "configured provider"}` : `✗ ${testResult.error || "Test failed"}`}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Info className="w-3 h-3" /> Save settings first, then test. Test send doesn't require recipients to be in your network.</p>
+        </Section>
       </div>
+    </div>
+  );
+}
+
+function Section({ title, icon, description, children }: { title: string; icon: React.ReactNode; description: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100">
+        <div className="flex items-center gap-2 text-sm font-bold text-gray-800">{icon} {title}</div>
+        <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return (
+    <div className={full ? "col-span-2" : ""}>
+      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">{label}</label>
+      {children}
     </div>
   );
 }
