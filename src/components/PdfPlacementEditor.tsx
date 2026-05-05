@@ -89,6 +89,7 @@ export function PdfPlacementEditor({
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [displayedPageWidth, setDisplayedPageWidth] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; offsetXPct: number; offsetYPct: number } | null>(null);
 
@@ -140,6 +141,27 @@ export function PdfPlacementEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track the actual rendered page width (in CSS pixels) so the editor preview
+  // can scale font sizes correctly: PDF font_size is in PDF points, but the
+  // page is displayed at min(820px, 100%) of the panel — so 1pt in PDF maps to
+  // (displayed_width_px / pdf_width_pt) px on screen.
+  useEffect(() => {
+    if (!open) return;
+    const el = pageRef.current;
+    if (!el) return;
+    const update = () => setDisplayedPageWidth(el.offsetWidth || 0);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, activePage, pageMeta]);
+
+  const fontScale = useMemo(() => {
+    const pdfW = pageMeta[activePage]?.width || 612;
+    if (!displayedPageWidth || !pdfW) return 1;
+    return displayedPageWidth / pdfW;
+  }, [pageMeta, activePage, displayedPageWidth]);
+
   const totalPages = pageMeta[activePage]?.pageCount || 1;
   const placementsOnPage = useMemo(
     () => placements.filter((p) => p.page === activePage),
@@ -153,6 +175,34 @@ export function PdfPlacementEditor({
   const deletePlacement = useCallback((id: string) => {
     setPlacements((prev) => prev.filter((p) => p.id !== id));
     setSelectedId((sid) => (sid === id ? null : sid));
+  }, []);
+
+  /** Split a placement's text on a delimiter ("|" for table cells, "\n" for
+   * lines) into multiple placements. Each piece gets a slightly offset position
+   * so the user can immediately see and reposition them. */
+  const splitPlacement = useCallback((id: string, mode: "pipe" | "line") => {
+    setPlacements((prev) => {
+      const idx = prev.findIndex((p) => p.id === id);
+      if (idx < 0) return prev;
+      const orig = prev[idx];
+      const sep = mode === "pipe" ? /\s*\|\s*/ : /\n+/;
+      const pieces = orig.text.split(sep).map((s) => s.trim()).filter(Boolean);
+      if (pieces.length <= 1) return prev;
+      // Spacing: pipe pieces tile horizontally, line pieces tile vertically.
+      const isPipe = mode === "pipe";
+      const newItems: EditorPlacement[] = pieces.map((piece, i) => ({
+        id: `p-split-${Date.now()}-${i}`,
+        page: orig.page,
+        x_pct: isPipe ? Math.min(95, orig.x_pct + i * 12) : orig.x_pct,
+        y_pct: isPipe ? orig.y_pct : Math.min(95, orig.y_pct + i * 2.5),
+        text: piece,
+        font_size: orig.font_size,
+      }));
+      const next = [...prev];
+      next.splice(idx, 1, ...newItems);
+      return next;
+    });
+    setSelectedId(null);
   }, []);
 
   const addPlacement = useCallback(() => {
@@ -382,11 +432,13 @@ export function PdfPlacementEditor({
                   style={{
                     left: `${p.x_pct}%`,
                     top: `${p.y_pct}%`,
-                    fontSize: `${(p.font_size || 11) * 0.85}px`,
+                    // 1 PDF point = fontScale CSS px on screen → preview matches PDF
+                    fontSize: `${(p.font_size || 11) * fontScale}px`,
+                    lineHeight: 1.15,
                     fontFamily: "Helvetica, Arial, sans-serif",
                     color: "#000",
-                    padding: "1px 3px",
-                    minWidth: "20px",
+                    padding: "0 2px",
+                    minWidth: "12px",
                     maxWidth: `${100 - p.x_pct}%`,
                   }}
                 >
@@ -422,6 +474,27 @@ export function PdfPlacementEditor({
                     rows={3}
                     className="w-full text-xs p-2 rounded border border-slate-300 font-mono"
                   />
+                  {/* Split buttons — only show when text actually contains the delimiter */}
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {sel.text.includes("|") && (
+                      <button
+                        onClick={() => splitPlacement(sel.id!, "pipe")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded bg-white border border-slate-300 hover:bg-blue-50 hover:border-blue-400"
+                        title="Split this row on '|' into one element per cell"
+                      >
+                        Split table cells (|)
+                      </button>
+                    )}
+                    {sel.text.includes("\n") && (
+                      <button
+                        onClick={() => splitPlacement(sel.id!, "line")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded bg-white border border-slate-300 hover:bg-blue-50 hover:border-blue-400"
+                        title="Split each line into its own element"
+                      >
+                        Split by line
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
                     <label className="flex flex-col">
                       <span className="text-slate-500">Page</span>
