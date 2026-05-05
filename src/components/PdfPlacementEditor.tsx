@@ -87,6 +87,7 @@ export function PdfPlacementEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const pageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; offsetXPct: number; offsetYPct: number } | null>(null);
 
@@ -233,8 +234,8 @@ export function PdfPlacementEditor({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-7xl h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-2 md:p-4">
+      <div className="bg-white sm:rounded-lg shadow-2xl w-full max-w-[1600px] h-[100vh] sm:h-[96vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
           <div>
@@ -268,40 +269,55 @@ export function PdfPlacementEditor({
           </div>
         </div>
 
-        {/* Page tabs */}
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1 px-4 py-2 border-b border-slate-200 bg-white">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pn) => {
-              const count = placements.filter((p) => p.page === pn).length;
-              return (
-                <button
-                  key={pn}
-                  onClick={() => setActivePage(pn)}
-                  className={`px-3 py-1 text-xs rounded ${
-                    activePage === pn
-                      ? "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-transparent"
-                  }`}
-                >
-                  Page {pn}
-                  {count > 0 && (
-                    <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Page tabs + sidebar toggle */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white">
+          {totalPages > 1 ? (
+            <div className="flex-1 min-w-0 overflow-x-auto flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pn) => {
+                const count = placements.filter((p) => p.page === pn).length;
+                return (
+                  <button
+                    key={pn}
+                    onClick={() => setActivePage(pn)}
+                    className={`shrink-0 px-3 py-1 text-xs rounded whitespace-nowrap ${
+                      activePage === pn
+                        ? "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-transparent"
+                    }`}
+                  >
+                    Page {pn}
+                    {count > 0 && (
+                      <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1 text-[11px] text-slate-500">Page 1 of 1</div>
+          )}
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded border border-slate-300 hover:bg-slate-100"
+            title={sidebarOpen ? "Hide side panel" : "Show side panel"}
+          >
+            {sidebarOpen ? "Hide Panel" : "Show Panel"}
+          </button>
+        </div>
 
         {/* Body: PDF canvas + side panel */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-w-0">
           {/* PDF page with draggable overlays */}
-          <div className="flex-1 overflow-auto bg-slate-200 p-4 flex items-start justify-center">
+          {/* Note: NOT using flex justify-center on this scroll container because
+              when content overflows, justify-center clips the LEFT half — you
+              can only scroll right. Using a centered inner wrapper instead so
+              horizontal overflow scrolls in BOTH directions cleanly. */}
+          <div className="flex-1 overflow-auto bg-slate-200 p-3 sm:p-4 min-w-0">
             <div
               ref={pageRef}
-              className="relative bg-white shadow-md select-none"
+              className="relative bg-white shadow-md select-none mx-auto"
               style={{
-                width: "min(800px, 100%)",
+                width: "min(820px, 100%)",
                 aspectRatio: pageMeta[activePage]
                   ? `${pageMeta[activePage].width} / ${pageMeta[activePage].height}`
                   : "8.5 / 11",
@@ -355,8 +371,10 @@ export function PdfPlacementEditor({
             </div>
           </div>
 
-          {/* Right panel: list + inspector */}
-          <div className="w-80 border-l border-slate-200 bg-white flex flex-col">
+          {/* Right panel: list + inspector (collapsible on narrow screens) */}
+          <div
+            className={`${sidebarOpen ? "w-72 md:w-80" : "w-0"} shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden transition-[width] duration-200`}
+          >
             {/* Inspector for selected */}
             {selectedId && (() => {
               const sel = placements.find((p) => p.id === selectedId);
