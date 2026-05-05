@@ -671,6 +671,15 @@ export interface ProposedChange {
   source_file_id?: string;
   position?: string;
   label?: string;
+  // PDF placement editor (filled scanned PDFs)
+  placements?: Array<{
+    page: number;
+    x_pct: number;
+    y_pct: number;
+    text: string;
+    font_size?: number;
+  }>;
+  editor_supported?: boolean;
 }
 
 export interface PdfInsert {

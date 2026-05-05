@@ -10,12 +10,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   X, Send, Paperclip, Trash2, Check, Loader2, FileText,
   Sparkles, ChevronDown, ChevronUp, Download, Paperclip as PaperclipIcon,
+  Move,
 } from "lucide-react";
 import {
   listChatMessages, clearChatMessages, uploadChatFile, streamDraftChat,
   downloadChatUpload,
   type ChatMessage, type ChatUploadRecord, type ProposedChange, type ChatToolCall,
 } from "@/lib/api";
+import { PdfPlacementEditor, type EditorPlacement } from "@/components/PdfPlacementEditor";
 
 export interface PendingProposal extends ProposedChange {
   tool_id?: string;
@@ -52,10 +54,14 @@ function shortDiff(before: string, after: string): { added: number; removed: num
 }
 
 function ProposalCard({
+  draftId,
+  onEditPdf,
   proposal,
   onApply,
   onReject,
 }: {
+  draftId: string | null;
+  onEditPdf: (proposal: PendingProposal) => void;
   proposal: PendingProposal;
   onApply: () => void;
   onReject: () => void;
@@ -73,34 +79,51 @@ function ProposalCard({
     attach_pdf: "Attach to final PDF",
   };
   const label = labels[proposal.kind] || proposal.kind;
+  // Suppress lints — draftId is used by callers via closure, included for future
+  // refactors where this card needs draft context directly.
+  void draftId;
 
-  // ── Download-file proposal (filled Excel) ────────────────────────────
+  // ── Download-file proposal (filled Excel / filled PDF) ─────────────────
   if (proposal.kind === "download_file") {
+    const editorSupported = Boolean(
+      proposal.editor_supported && proposal.source_file_id && Array.isArray(proposal.placements) && proposal.placements.length > 0
+    );
     return (
       <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2">
-        <div className="flex items-center justify-between">
-          <div className="text-xs">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-xs min-w-0">
             <span className="font-bold text-emerald-900">{label}</span>
-            <span className="ml-1 text-slate-700">{proposal.file_name || "file"}</span>
+            <span className="ml-1 text-slate-700 break-all">{proposal.file_name || "file"}</span>
             {typeof proposal.filled_count === "number" && (
               <span className="ml-2 text-[10px] text-slate-600">
-                {proposal.filled_count} CLIN rows filled
+                {proposal.filled_count} placements
               </span>
             )}
           </div>
-          <button
-            onClick={async () => {
-              if (!proposal.file_id) return;
-              try {
-                await downloadChatUpload(proposal.file_id, proposal.file_name);
-              } catch (e) {
-                alert(e instanceof Error ? e.message : "Download failed");
-              }
-            }}
-            className="text-[10px] font-bold text-white px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 rounded inline-flex items-center gap-1"
-          >
-            <Download className="w-3 h-3" /> DOWNLOAD
-          </button>
+          <div className="flex gap-1">
+            {editorSupported && (
+              <button
+                onClick={() => onEditPdf(proposal)}
+                className="text-[10px] font-bold text-amber-900 px-2 py-0.5 bg-white hover:bg-amber-50 border border-amber-400 rounded inline-flex items-center gap-1"
+                title="Drag any text in the form to its correct position"
+              >
+                <Move className="w-3 h-3" /> EDIT POSITIONS
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                if (!proposal.file_id) return;
+                try {
+                  await downloadChatUpload(proposal.file_id, proposal.file_name);
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Download failed");
+                }
+              }}
+              className="text-[10px] font-bold text-white px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 rounded inline-flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" /> DOWNLOAD
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -238,6 +261,11 @@ export default function DraftChatPanel({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [pdfEditor, setPdfEditor] = useState<{
+    messageIdx: number;
+    proposalIdx: number;
+    proposal: PendingProposal;
+  } | null>(null);
 
   // Convert persisted DB messages → UiMessage shape
   const hydrate = useCallback((dbMessages: ChatMessage[]): UiMessage[] => {
@@ -578,6 +606,8 @@ export default function DraftChatPanel({
               {m.proposals.map((p, pi) => (
                 <ProposalCard
                   key={`${m.id}-${pi}`}
+                  draftId={draftId}
+                  onEditPdf={(prop) => setPdfEditor({ messageIdx: mi, proposalIdx: pi, proposal: prop })}
                   proposal={p}
                   onApply={() => handleApply(mi, pi)}
                   onReject={() => handleReject(mi, pi)}
@@ -665,6 +695,30 @@ export default function DraftChatPanel({
           </div>
         )}
       </div>
+
+      {pdfEditor && (
+        <PdfPlacementEditor
+          open={true}
+          onClose={() => setPdfEditor(null)}
+          draftId={draftId}
+          sourceFileId={(pdfEditor.proposal.source_file_id as string) || ""}
+          initialPlacements={(pdfEditor.proposal.placements as EditorPlacement[]) || []}
+          initialFileName={pdfEditor.proposal.file_name}
+          onSaved={(newFileId, newFileName) => {
+            // Update the proposal in-place so the DOWNLOAD button now points
+            // at the user-edited file.
+            setMessages((prev) => prev.map((m, mi) => {
+              if (mi !== pdfEditor.messageIdx) return m;
+              const newProposals = m.proposals.map((p, pi) => {
+                if (pi !== pdfEditor.proposalIdx) return p;
+                return { ...p, file_id: newFileId, file_name: newFileName };
+              });
+              return { ...m, proposals: newProposals };
+            }));
+            setPdfEditor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
