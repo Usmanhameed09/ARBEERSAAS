@@ -242,6 +242,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("arber_profile");
     localStorage.removeItem("arber_opportunities");
     localStorage.removeItem("arber_login_type");
+    // Reset opportunity-search filters so a new login starts at profile defaults.
+    localStorage.removeItem("arber_filters");
   };
 
   const updateProfile = async (updates: Partial<CompanyProfile>) => {

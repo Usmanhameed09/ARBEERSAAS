@@ -121,7 +121,11 @@ export default function FetcherBar({
 }: FetcherBarProps) {
   const storedFilters = loadStoredFilters();
   const normalizedProfileNaics = (profileNaicsCodes || []).map((code) => code.trim()).filter(Boolean);
-  const initialNaics = normalizedProfileNaics.length > 0 ? normalizedProfileNaics : storedFilters.naicsCodes;
+  // Saved filters win — only fall back to profile NAICS if the user has no
+  // saved selection at all (first-ever visit, or after logout cleared storage).
+  const initialNaics = storedFilters.naicsCodes.length > 0
+    ? storedFilters.naicsCodes
+    : normalizedProfileNaics;
 
   const [showFilters, setShowFilters] = useState(true);
   const [dateRange, setDateRange] = useState(storedFilters.dateRange);

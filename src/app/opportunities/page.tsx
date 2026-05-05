@@ -348,8 +348,9 @@ function OpportunitiesContent() {
       </div>
 
       {/* Fetcher Bar */}
+      {/* Note: NO `key` prop — we don't want FetcherBar to remount whenever
+          profile NAICS load, because that wipes the user's in-session edits. */}
       <FetcherBar
-        key={`fetcher-${profileNaicsCodes.join(",") || "none"}`}
         lastFetchTime={lastFetchTime}
         isScanning={isScanning}
         isAnalyzing={isAnalyzing}

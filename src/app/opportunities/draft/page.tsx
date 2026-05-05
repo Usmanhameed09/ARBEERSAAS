@@ -411,6 +411,39 @@ export default function DraftViewerPage() {
       }
       initial[s.key] = content;
     });
+
+    // Pick up any "extra" sections — keys saved in the draft that aren't part of
+    // SECTION_DEFS. These come from add_new_section calls in the chat assistant.
+    // We need to: (a) include their content in editedContent, (b) register them
+    // in extraSections so the sidebar + PDF render them.
+    const knownKeys = new Set(SECTION_DEFS.map((s) => s.key));
+    const orphans: DraftSection[] = [];
+    for (const [k, v] of Object.entries(d)) {
+      if (knownKeys.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      initial[k] = v;
+      // Humanize the key into a title: "experienceQuestionnaire" → "Experience Questionnaire"
+      const title = k
+        .replace(/[_\-]+/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\b([a-z])/g, (_, ch: string) => ch.toUpperCase())
+        .trim();
+      orphans.push({
+        key: k,
+        title: title || k,
+        icon: <Sparkles className="w-3.5 h-3.5" />,
+      });
+    }
+    if (orphans.length > 0) {
+      setExtraSections((prev) => {
+        const have = new Set(prev.map((s) => s.key));
+        const merged = [...prev];
+        for (const o of orphans) if (!have.has(o.key)) merged.push(o);
+        return merged;
+      });
+      console.log("[initializeContent] restored extra sections:", orphans.map((o) => o.key));
+    }
+
     const nonEmpty = Object.entries(initial).filter(([, v]) => v && v.length > 0);
     console.log("[initializeContent] Setting editedContent:", nonEmpty.length, "non-empty sections:", nonEmpty.map(([k, v]) => `${k}:${v.length}`));
     setEditedContent(initial);
