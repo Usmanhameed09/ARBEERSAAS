@@ -40,8 +40,35 @@ interface Props {
 
 interface PageMeta { pageCount: number; width: number; height: number }
 
-function ensureIds(list: EditorPlacement[]): EditorPlacement[] {
-  return list.map((p, i) => ({ ...p, id: p.id || `p${i}-${Math.random().toString(36).slice(2, 8)}` }));
+/** Normalize placements coming from the backend, which may use either the
+ * point shape ({x_pct, y_pct}) or the rect shape ({x1_pct, y1_pct, x2_pct, y2_pct})
+ * depending on which fill path produced them. The editor uses the point shape;
+ * we map rect → top-left point. Also fills in defaults so undefined/NaN can't
+ * crash the rendering math.
+ */
+function normalizePlacement(raw: unknown, idx: number): EditorPlacement | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const text = typeof r.text === "string" ? r.text : "";
+  if (!text) return null;
+  const page = Number.isFinite(Number(r.page)) ? Math.max(1, Math.floor(Number(r.page))) : 1;
+  const xRaw = Number(r.x_pct ?? r.x1_pct);
+  const yRaw = Number(r.y_pct ?? r.y1_pct);
+  const x_pct = Number.isFinite(xRaw) ? Math.max(0, Math.min(100, xRaw)) : 0;
+  const y_pct = Number.isFinite(yRaw) ? Math.max(0, Math.min(100, yRaw)) : 0;
+  const fsRaw = Number(r.font_size);
+  const font_size = Number.isFinite(fsRaw) && fsRaw > 0 ? fsRaw : 11;
+  return {
+    id: typeof r.id === "string" && r.id ? r.id : `p${idx}-${Math.random().toString(36).slice(2, 8)}`,
+    page, x_pct, y_pct, text, font_size,
+  };
+}
+
+function ensureIds(list: unknown): EditorPlacement[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((p, i) => normalizePlacement(p, i))
+    .filter((p): p is EditorPlacement => p !== null);
 }
 
 function authHeaders(): Record<string, string> {
@@ -357,7 +384,7 @@ export function PdfPlacementEditor({
                       <span className="text-slate-500">Page</span>
                       <input
                         type="number" min={1} max={totalPages}
-                        value={sel.page}
+                        value={Number.isFinite(sel.page) ? sel.page : 1}
                         onChange={(e) => updatePlacement(sel.id!, { page: parseInt(e.target.value) || 1 })}
                         className="px-1.5 py-1 rounded border border-slate-300"
                       />
@@ -366,7 +393,7 @@ export function PdfPlacementEditor({
                       <span className="text-slate-500">X %</span>
                       <input
                         type="number" step={0.1} min={0} max={100}
-                        value={sel.x_pct.toFixed(1)}
+                        value={Number.isFinite(sel.x_pct) ? sel.x_pct.toFixed(1) : "0"}
                         onChange={(e) => updatePlacement(sel.id!, { x_pct: parseFloat(e.target.value) || 0 })}
                         className="px-1.5 py-1 rounded border border-slate-300"
                       />
@@ -375,7 +402,7 @@ export function PdfPlacementEditor({
                       <span className="text-slate-500">Y %</span>
                       <input
                         type="number" step={0.1} min={0} max={100}
-                        value={sel.y_pct.toFixed(1)}
+                        value={Number.isFinite(sel.y_pct) ? sel.y_pct.toFixed(1) : "0"}
                         onChange={(e) => updatePlacement(sel.id!, { y_pct: parseFloat(e.target.value) || 0 })}
                         className="px-1.5 py-1 rounded border border-slate-300"
                       />
@@ -402,18 +429,21 @@ export function PdfPlacementEditor({
               {placements.length === 0 && (
                 <div className="px-3 py-4 text-xs text-slate-500">No fields yet — click Add Field to start.</div>
               )}
-              {placements.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => { setActivePage(p.page); setSelectedId(p.id || null); }}
-                  className={`block w-full text-left px-3 py-1.5 text-xs border-b border-slate-100 hover:bg-slate-50 ${
-                    selectedId === p.id ? "bg-amber-50" : ""
-                  }`}
-                >
-                  <span className="text-[10px] font-mono text-slate-500">p{p.page}</span>
-                  <span className="ml-2 text-slate-800">{p.text.slice(0, 40)}{p.text.length > 40 ? "…" : ""}</span>
-                </button>
-              ))}
+              {placements.map((p) => {
+                const txt = typeof p.text === "string" ? p.text : "";
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => { setActivePage(p.page); setSelectedId(p.id || null); }}
+                    className={`block w-full text-left px-3 py-1.5 text-xs border-b border-slate-100 hover:bg-slate-50 ${
+                      selectedId === p.id ? "bg-amber-50" : ""
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono text-slate-500">p{p.page}</span>
+                    <span className="ml-2 text-slate-800">{txt.slice(0, 40)}{txt.length > 40 ? "…" : ""}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
