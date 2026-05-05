@@ -362,6 +362,12 @@ export default function DraftViewerPage() {
   // static SECTION_DEFS so they show up in the sidebar and PDF render.
   const [extraSections, setExtraSections] = useState<DraftSection[]>([]);
 
+  // User-customized section order (drag-to-reorder in the sidebar). Persists
+  // per-draft in localStorage. If null, uses the natural [SECTION_DEFS, ...extra] order.
+  const [sectionOrder, setSectionOrder] = useState<string[] | null>(null);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
   // Provenance modal state (V2 pipeline) — shows which sources were used to generate a section
   const [provenanceOpen, setProvenanceOpen] = useState<string | null>(null); // section key or null
   const provenanceMap: Record<string, SectionProvenance> =
@@ -507,6 +513,30 @@ export default function DraftViewerPage() {
   const formattingReqsRef = useRef(formattingReqs);
   useEffect(() => { dataRef.current = data; }, [data]);
   useEffect(() => { draftIdRef.current = draftId; }, [draftId]);
+
+  // Load any saved section order for this draft from localStorage.
+  useEffect(() => {
+    if (!draftId) { setSectionOrder(null); return; }
+    try {
+      const raw = localStorage.getItem(`arber_section_order_${draftId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.every((k) => typeof k === "string")) {
+          setSectionOrder(parsed);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+    setSectionOrder(null);
+  }, [draftId]);
+
+  // Persist section order whenever it changes.
+  useEffect(() => {
+    if (!draftId || !sectionOrder) return;
+    try {
+      localStorage.setItem(`arber_section_order_${draftId}`, JSON.stringify(sectionOrder));
+    } catch { /* ignore quota errors */ }
+  }, [draftId, sectionOrder]);
   useEffect(() => { editedContentRef.current = editedContent; }, [editedContent]);
   useEffect(() => { pageLimitsRef.current = pageLimits; }, [pageLimits]);
   useEffect(() => { formattingReqsRef.current = formattingReqs; }, [formattingReqs]);
@@ -1852,6 +1882,24 @@ export default function DraftViewerPage() {
       }
       } // end else (no Excel pricing)
 
+      // ─── EXTRA SECTIONS (added by AI assistant via add_new_section) ─────
+      // Render any user-added sections that aren't in the static SECTION_DEFS
+      // pipeline above. Each gets its own page with a centered title header.
+      for (const extra of extraSections) {
+        const extraContent = cleanContentForPdf(getContent(extra.key) || "");
+        if (!extraContent) continue;
+        doc.addPage();
+        addPageHeader(solNum, comp.name);
+        y = 28;
+        tocEntries.push({ title: extra.title, page: doc.getNumberOfPages() });
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(extra.title, pageWidth / 2, y, { align: "center" });
+        y += 12;
+        y = writeMultiLine(extraContent, y, 10);
+      }
+
       // ─── VOLUME IV: REPS & CERTS ───────────────────────────────
       // ─── REPS & CERTS ───────────────────────────────
       const repsContent = cleanContentForPdf(getContent("repsAndCerts"));
@@ -2224,7 +2272,7 @@ export default function DraftViewerPage() {
     } finally {
       setGeneratingPdf(false);
     }
-  }, [data, getContent]);
+  }, [data, getContent, extraSections]);
 
   // Keep the ref in sync so toggleSubmitted can call handleDownloadPdf
   // even though it's declared before the function above.
@@ -2248,8 +2296,36 @@ export default function DraftViewerPage() {
   // Show any section the backend actually drafted. For RFQs the section picker
   // may add normally-RFP-only sections (technical/management/QCP/past perf);
   // presence of content is the reliable signal — no bid-type filter.
-  const sections = [...SECTION_DEFS, ...extraSections].filter((s) => Boolean(getContent(s.key)));
+  const allSectionsRaw = [...SECTION_DEFS, ...extraSections].filter((s) => Boolean(getContent(s.key)));
+  // Apply user-customized drag-reordered order if present.
+  const sections = (() => {
+    if (!sectionOrder) return allSectionsRaw;
+    const byKey = new Map(allSectionsRaw.map((s) => [s.key, s]));
+    const ordered: typeof allSectionsRaw = [];
+    for (const k of sectionOrder) {
+      const s = byKey.get(k);
+      if (s) { ordered.push(s); byKey.delete(k); }
+    }
+    // Append any sections not in the saved order (newly added etc.) at the end.
+    for (const s of byKey.values()) ordered.push(s);
+    return ordered;
+  })();
   const currentSection = sections[activeSection] || sections[0];
+
+  const reorderSection = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    const currentKeys = sections.map((s) => s.key);
+    const fromIdx = currentKeys.indexOf(fromKey);
+    const toIdx = currentKeys.indexOf(toKey);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = currentKeys.slice();
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setSectionOrder(next);
+    // Keep the same active section selected after reorder.
+    const activeKey = sections[activeSection]?.key;
+    if (activeKey) setActiveSection(next.indexOf(activeKey));
+  };
 
   return (
     <div className="min-h-screen bg-[#eef1f4]">
@@ -2439,12 +2515,38 @@ export default function DraftViewerPage() {
                   <button
                     key={section.key}
                     onClick={() => setActiveSection(i)}
-                    className={`w-full flex items-center gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg text-left text-[11px] sm:text-xs font-medium transition-all ${
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggingKey(section.key);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", section.key);
+                    }}
+                    onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
+                    onDragOver={(e) => {
+                      if (!draggingKey || draggingKey === section.key) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDragOverKey(section.key);
+                    }}
+                    onDragLeave={() => setDragOverKey((k) => (k === section.key ? null : k))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const from = e.dataTransfer.getData("text/plain") || draggingKey;
+                      if (from) reorderSection(from, section.key);
+                      setDraggingKey(null);
+                      setDragOverKey(null);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg text-left text-[11px] sm:text-xs font-medium transition-all cursor-grab active:cursor-grabbing ${
                       activeSection === i
                         ? "bg-amber-50 text-amber-800 border border-amber-200"
                         : "text-slate-600 hover:bg-slate-50"
+                    } ${draggingKey === section.key ? "opacity-40" : ""} ${
+                      dragOverKey === section.key ? "ring-2 ring-amber-400 ring-offset-1" : ""
                     }`}
+                    title="Drag to reorder"
                   >
+                    {/* Drag handle dots — visual cue this row is draggable */}
+                    <span className="shrink-0 text-slate-300 select-none leading-none" aria-hidden>⋮⋮</span>
                     <span className={`shrink-0 ${activeSection === i ? "text-amber-600" : "text-slate-400"}`}>
                       {section.icon}
                     </span>
