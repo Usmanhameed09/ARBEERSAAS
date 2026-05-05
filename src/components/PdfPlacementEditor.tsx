@@ -15,7 +15,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { X, Plus, Trash2, Save, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 
 export interface EditorPlacement {
@@ -232,9 +233,13 @@ export function PdfPlacementEditor({
   }, [draftId, sourceFileId, placements, initialFileName, onSaved, onClose]);
 
   if (!open) return null;
+  // Render through a portal at document.body so the modal escapes any
+  // transformed/positioned ancestor (e.g. the chat panel slides via transform,
+  // which would otherwise contain `position: fixed`).
+  if (typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-2 md:p-4">
+  return createPortal((
+    <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-2 md:p-4">
       <div className="bg-white sm:rounded-lg shadow-2xl w-full max-w-[1600px] h-[100vh] sm:h-[96vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
@@ -269,33 +274,53 @@ export function PdfPlacementEditor({
           </div>
         </div>
 
-        {/* Page tabs + sidebar toggle */}
+        {/* Page navigation + tabs + sidebar toggle */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white">
-          {totalPages > 1 ? (
-            <div className="flex-1 min-w-0 overflow-x-auto flex items-center gap-1">
+          {/* Prev / Next buttons — always visible so navigation is obvious */}
+          <button
+            onClick={() => setActivePage((p) => Math.max(1, p - 1))}
+            disabled={activePage <= 1}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Previous page"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" /> Prev
+          </button>
+          <div className="shrink-0 text-xs font-semibold text-slate-700 tabular-nums">
+            Page {activePage} / {totalPages}
+          </div>
+          <button
+            onClick={() => setActivePage((p) => Math.min(totalPages, p + 1))}
+            disabled={activePage >= totalPages}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Next page"
+          >
+            Next <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+          {/* Per-page tabs (scrollable) when more than 1 page */}
+          {totalPages > 1 && (
+            <div className="flex-1 min-w-0 overflow-x-auto flex items-center gap-1 ml-2 pl-2 border-l border-slate-200">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((pn) => {
                 const count = placements.filter((p) => p.page === pn).length;
                 return (
                   <button
                     key={pn}
                     onClick={() => setActivePage(pn)}
-                    className={`shrink-0 px-3 py-1 text-xs rounded whitespace-nowrap ${
+                    className={`shrink-0 px-2.5 py-1 text-xs rounded whitespace-nowrap ${
                       activePage === pn
                         ? "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
                         : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-transparent"
                     }`}
                   >
-                    Page {pn}
+                    {pn}
                     {count > 0 && (
-                      <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
+                      <span className="ml-1 text-[10px] opacity-70">({count})</span>
                     )}
                   </button>
                 );
               })}
             </div>
-          ) : (
-            <div className="flex-1 text-[11px] text-slate-500">Page 1 of 1</div>
           )}
+          {totalPages <= 1 && <div className="flex-1" />}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded border border-slate-300 hover:bg-slate-100"
@@ -473,5 +498,5 @@ export function PdfPlacementEditor({
         )}
       </div>
     </div>
-  );
+  ), document.body);
 }
