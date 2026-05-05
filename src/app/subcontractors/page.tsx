@@ -59,8 +59,19 @@ export default function SubcontractorsPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const profileNaics = (companyProfile?.naicsCodes || []) as string[];
-  const profileState = (companyProfile?.state || "") as string;
-  const profileCity = (companyProfile?.city || "") as string;
+  // CompanyProfile stores a single companyAddress string (not split into city/state).
+  // We try to extract a 2-letter state code from the end of the address as a default;
+  // otherwise leave the modal fields blank for the user to fill in.
+  const profileState = (() => {
+    const addr = companyProfile?.companyAddress || "";
+    const m = addr.match(/,\s*([A-Z]{2})\s*\d{0,5}\s*$/);
+    return m ? m[1] : "";
+  })();
+  const profileCity = (() => {
+    const addr = companyProfile?.companyAddress || "";
+    const m = addr.match(/,\s*([^,]+),\s*[A-Z]{2}\s*\d{0,5}\s*$/);
+    return m ? m[1].trim() : "";
+  })();
 
   const states = useMemo(
     () => ["All", ...Array.from(new Set(subs.map((s) => s.state).filter(Boolean) as string[])).sort()],
