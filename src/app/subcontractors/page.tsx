@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search, Filter, Star, Plus, Shield, Compass, Award, Globe, Phone, Mail, Loader2,
-  CheckCircle2, AlertCircle, X,
+  CheckCircle2, AlertCircle, X, Edit2,
 } from "lucide-react";
 import {
   listSubcontractors, createSubcontractor, deleteSubcontractor,
@@ -42,6 +42,7 @@ export default function SubcontractorsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showDiscover, setShowDiscover] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [editing, setEditing] = useState<SubcontractorRecord | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -312,6 +313,9 @@ export default function SubcontractorsPage() {
                       <button onClick={() => handleTogglePreferred(sub)} className={`p-1 rounded ${sub.preferred ? "text-orange-400" : "text-gray-300 hover:text-orange-400"}`} title={sub.preferred ? "Remove preferred" : "Mark preferred"}>
                         <Star className={`w-4 h-4 ${sub.preferred ? "fill-orange-400" : ""}`} />
                       </button>
+                      <button onClick={() => setEditing(sub)} className="p-1 text-gray-300 hover:text-blue-500" title="Edit (add email / contact)">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <button onClick={() => handleDelete(sub.id)} className="p-1 text-gray-300 hover:text-red-500" title="Remove">
                         <X className="w-4 h-4" />
                       </button>
@@ -348,6 +352,104 @@ export default function SubcontractorsPage() {
           onSaved={() => { setShowAdd(false); refresh(); }}
         />
       )}
+
+      {/* Edit existing sub modal — primarily for filling in missing emails */}
+      {editing && (
+        <EditModal
+          sub={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setSubs((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setEditing(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditModal({ sub, onClose, onSaved }: { sub: SubcontractorRecord; onClose: () => void; onSaved: (s: SubcontractorRecord) => void }) {
+  const [form, setForm] = useState({
+    contactName: sub.contactName || "",
+    contactEmail: sub.contactEmail || "",
+    contactPhone: sub.contactPhone || "",
+    website: sub.website || "",
+    notes: sub.notes || "",
+    insuranceStatus: sub.insuranceStatus || "unknown",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateSubcontractor(sub.id, form);
+      if (!updated) throw new Error("save failed");
+      onSaved(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full px-2 py-1.5 text-xs border border-slate-300 rounded";
+
+  return (
+    <div className="fixed inset-0 z-[1000] bg-slate-900/60 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold">Edit {sub.company}</h2>
+            <p className="text-[10px] text-slate-500">Add missing contact info — emails are required for campaigns to include this sub.</p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-4 grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Contact Name</label>
+            <input value={form.contactName} onChange={(e) => setForm({...form, contactName: e.target.value})} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Email *</label>
+            <input value={form.contactEmail} onChange={(e) => setForm({...form, contactEmail: e.target.value})} placeholder="info@company.com" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Phone</label>
+            <input value={form.contactPhone} onChange={(e) => setForm({...form, contactPhone: e.target.value})} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Website</label>
+            <input value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} placeholder="https://..." className={inputCls} />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Insurance Status</label>
+            <select value={form.insuranceStatus} onChange={(e) => setForm({...form, insuranceStatus: e.target.value})} className={inputCls}>
+              <option value="unknown">Unknown</option>
+              <option value="verified">Verified</option>
+              <option value="pending">Pending</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} rows={2} className={inputCls} />
+          </div>
+          {error && <div className="col-span-2 text-rose-700 text-xs flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {error}</div>}
+          {sub.website && (
+            <div className="col-span-2 text-[10px] text-slate-500">
+              Tip: visit <a href={sub.website} target="_blank" rel="noopener" className="text-blue-600 underline">{sub.website}</a> to find their contact email.
+            </div>
+          )}
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs font-semibold rounded border border-slate-300 hover:bg-slate-100">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
