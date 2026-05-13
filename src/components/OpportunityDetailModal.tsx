@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import StartOutreachButton from "@/components/StartOutreachButton";
 import {
   X,
   Calendar,
@@ -644,6 +645,24 @@ export default function OpportunityDetailModal({
             <span className="hidden sm:inline">Download All Docs</span>
             <span className="sm:hidden">Docs</span>
           </button>
+          {/* Launch a subcontractor outreach campaign from this opportunity */}
+          <StartOutreachButton
+            label="Outreach Campaign"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-lg"
+            opportunityNoticeId={opportunity.noticeId}
+            opportunityTitle={opportunity.title}
+            opportunityAgency={opportunity.agency}
+            scopeSummary={(opportunity.fullDescription || opportunity.summary || "").slice(0, 800)}
+            tradeRequired={opportunity.title}
+            locationCity={(opportunity.placeOfPerformance || "").split(",")[0]?.trim()}
+            locationState={(() => {
+              const m = (opportunity.placeOfPerformance || "").match(/,\s*([A-Z]{2})\b/);
+              return m ? m[1] : "";
+            })()}
+            deadlineDate={opportunity.dueDate}
+            naicsCode={opportunity.naicsCode}
+            predictedBid={opportunity.pricingPrediction?.predictedBid}
+          />
         </div>
       </div>
 
