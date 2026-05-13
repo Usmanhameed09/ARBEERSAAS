@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Loader2, AlertCircle, Send, ChevronRight, Pause, CheckCircle2, Clock, ShieldAlert,
-  RefreshCw,
+  RefreshCw, Plus,
 } from "lucide-react";
 import { listCampaigns, type OutreachCampaign } from "@/lib/api";
+import OutreachCampaignBuilder from "@/components/OutreachCampaignBuilder";
 
 const STATUS_BADGE: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
   draft: { label: "Draft", cls: "bg-slate-100 text-slate-700", icon: <Clock className="w-3 h-3" /> },
@@ -21,6 +22,7 @@ export default function OutreachCampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "active" | "draft" | "closed">("all");
+  const [showNew, setShowNew] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -61,10 +63,24 @@ export default function OutreachCampaignsPage() {
             Email sequences sent to subcontractors per opportunity. Steps 2 & 3 send automatically based on your delay settings.
           </p>
         </div>
-        <button onClick={refresh} className="flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded border border-slate-300 hover:bg-slate-100">
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh} className="flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded border border-slate-300 hover:bg-slate-100">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </button>
+          <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">
+            <Plus className="w-3.5 h-3.5" /> New Campaign
+          </button>
+        </div>
       </div>
+
+      {showNew && (
+        <OutreachCampaignBuilder
+          open
+          onClose={() => setShowNew(false)}
+          defaults={{}}
+          onLaunched={() => { setShowNew(false); refresh(); }}
+        />
+      )}
 
       <div className="flex items-center gap-4 mb-4 text-sm">
         {(["all", "active", "draft", "closed"] as const).map((t) => (
