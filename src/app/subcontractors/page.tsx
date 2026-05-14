@@ -425,7 +425,7 @@ function EditModal({ sub, onClose, onSaved }: { sub: SubcontractorRecord; onClos
           </div>
           <div className="col-span-2">
             <label className="block text-[10px] font-semibold text-slate-600 mb-1">Insurance Status</label>
-            <select value={form.insuranceStatus} onChange={(e) => setForm({...form, insuranceStatus: e.target.value})} className={inputCls}>
+            <select value={form.insuranceStatus} onChange={(e) => setForm({...form, insuranceStatus: e.target.value as typeof form.insuranceStatus})} className={inputCls}>
               <option value="unknown">Unknown</option>
               <option value="verified">Verified</option>
               <option value="pending">Pending</option>
