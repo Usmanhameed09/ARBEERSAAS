@@ -1197,3 +1197,88 @@ export async function closeCampaign(campaignId: string, reason = "manual"): Prom
   const data = await resp.json();
   return Boolean(data.success);
 }
+
+// ============================================================================
+// OUTREACH — AI-drafted follow-up replies (Pending Follow-ups inbox)
+// ============================================================================
+
+export interface FollowupDraft {
+  id: string;
+  classification: "interested" | "clarifying_question" | "quote_provided" | string;
+  replyExcerpt?: string | null;
+  campaignId?: string | null;
+  campaignTitle?: string | null;
+  noticeId?: string | null;
+  tradeRequired?: string | null;
+  deadlineDate?: string | null;
+  recipientId?: string | null;
+  subcontractorId?: string | null;
+  subcontractorCompany?: string | null;
+  subcontractorContactName?: string | null;
+  subcontractorEmail?: string | null;
+  suggestedSubject: string;
+  suggestedBody: string;
+  suggestedAttachmentIds?: string[];
+  scopeSummary?: string | null;
+  status: "pending" | "sent" | "dismissed";
+  sentAt?: string | null;
+  dismissedAt?: string | null;
+  createdAt: string;
+}
+
+export interface FollowupAttachmentOption {
+  id: string;
+  source: "opportunity_attachment" | "certification";
+  fileName?: string | null;
+  fileType?: string | null;
+  fileSize?: string | null;
+  docType?: string | null;
+}
+
+export interface FollowupAttachmentOptions {
+  opportunityDocs: FollowupAttachmentOption[];
+  certifications: FollowupAttachmentOption[];
+}
+
+export async function listFollowupDrafts(status: "pending" | "sent" | "dismissed" | "all" = "pending"): Promise<{ drafts: FollowupDraft[]; pendingCount: number }> {
+  const resp = await fetch(`${API_BASE}/outreach/followups?status=${encodeURIComponent(status)}`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return { drafts: (data.drafts || []) as FollowupDraft[], pendingCount: data.pendingCount || 0 };
+}
+
+export async function getFollowupDraft(id: string): Promise<FollowupDraft | null> {
+  const resp = await fetch(`${API_BASE}/outreach/followups/${id}`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return data.success ? (data.draft as FollowupDraft) : null;
+}
+
+export async function getFollowupAttachmentOptions(id: string): Promise<FollowupAttachmentOptions | null> {
+  const resp = await fetch(`${API_BASE}/outreach/followups/${id}/attachment-options`, { headers: getAuthHeaders() });
+  const data = await resp.json();
+  return data.success ? (data.options as FollowupAttachmentOptions) : null;
+}
+
+export interface SendFollowupInput {
+  subject?: string;
+  body?: string;
+  attachments?: { source: string; refId: string }[];
+  uploads?: { filename: string; base64: string; mimeType: string }[];
+}
+
+export async function sendFollowupDraft(id: string, input: SendFollowupInput): Promise<{ success: boolean; provider?: string; attachments?: number; error?: string }> {
+  const resp = await fetch(`${API_BASE}/outreach/followups/${id}/send`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input),
+  });
+  return await resp.json();
+}
+
+export async function dismissFollowupDraft(id: string): Promise<boolean> {
+  const resp = await fetch(`${API_BASE}/outreach/followups/${id}/dismiss`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  const data = await resp.json();
+  return Boolean(data.success);
+}

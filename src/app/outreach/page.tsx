@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Mail, MailOpen, Send, CheckCircle2, Megaphone, AlertCircle,
-  ArrowRight, Loader2, Plus, Compass, Settings as SettingsIcon,
+  ArrowRight, Loader2, Plus, Compass, Settings as SettingsIcon, MessageSquareReply,
 } from "lucide-react";
-import { listCampaigns, type OutreachCampaign } from "@/lib/api";
+import { listCampaigns, listFollowupDrafts, type OutreachCampaign } from "@/lib/api";
 import OutreachCampaignBuilder from "@/components/OutreachCampaignBuilder";
 
 export default function OutreachPage() {
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
+  const [pendingFollowups, setPendingFollowups] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -18,8 +19,12 @@ export default function OutreachPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listCampaigns();
+      const [data, fu] = await Promise.all([
+        listCampaigns(),
+        listFollowupDrafts("pending").catch(() => ({ drafts: [], pendingCount: 0 })),
+      ]);
       setCampaigns(data);
+      setPendingFollowups(fu.pendingCount);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -47,6 +52,14 @@ export default function OutreachPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/outreach/followups" className="relative flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded border border-slate-300 hover:bg-slate-100">
+            <MessageSquareReply className="w-3.5 h-3.5" /> Follow-ups
+            {pendingFollowups > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-amber-500 text-white flex items-center justify-center">
+                {pendingFollowups}
+              </span>
+            )}
+          </Link>
           <Link href="/outreach/settings" className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded border border-slate-300 hover:bg-slate-100">
             <SettingsIcon className="w-3.5 h-3.5" /> Settings
           </Link>
@@ -134,7 +147,10 @@ export default function OutreachPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <ActionTile href="/outreach/followups" icon={<MessageSquareReply className="w-5 h-5" />}
+          title={`Pending Follow-ups${pendingFollowups > 0 ? ` (${pendingFollowups})` : ""}`}
+          description="AI-drafted replies to interested subs. Edit, attach docs, send with one click." />
         <ActionTile href="/subcontractors" icon={<Compass className="w-5 h-5" />} title="Subcontractor Network"
           description="Discover new subs from USASpending + SAM.gov, manage your network." />
         <ActionTile href="/outreach/emails" icon={<MailOpen className="w-5 h-5" />} title="Sent Emails"
