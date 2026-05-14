@@ -21,6 +21,7 @@ import {
   saveDiscoveredSubs,
   type DiscoveredSubItem,
   type DiscoverResponse,
+  type DiscoverSource,
 } from "@/lib/api";
 
 interface Props {
@@ -82,6 +83,9 @@ export default function DiscoverSubcontractorsModal({
   const [activeTab, setActiveTab] = useState<TabKey>("merged");
   const [selected, setSelected] = useState<Record<string, DiscoveredSubItem>>({});
   const [saving, setSaving] = useState(false);
+  const [sources, setSources] = useState<Record<DiscoverSource, boolean>>({
+    subawards: true, primes: true, sam: true, places: true,
+  });
 
   // Reset on open
   useEffect(() => {
@@ -93,12 +97,19 @@ export default function DiscoverSubcontractorsModal({
     setResults(null);
     setSelected({});
     setError(null);
+    setSources({ subawards: true, primes: true, sam: true, places: true });
   }, [open, defaultNaics, defaultState, defaultCity, defaultTrade]);
 
   const runDiscovery = useCallback(async () => {
     const naicsCodes = naicsInput.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+    const enabledSources = (Object.keys(sources) as DiscoverSource[]).filter((k) => sources[k]);
     if (naicsCodes.length === 0) { setError("Enter at least one NAICS code"); return; }
     if (!state) { setError("Select a state"); return; }
+    if (enabledSources.length === 0) { setError("Select at least one source"); return; }
+    if (sources.places && !trade.trim()) {
+      setError("Google Places needs a trade keyword (e.g. plumbing, HVAC, landscaping)");
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
@@ -108,20 +119,23 @@ export default function DiscoverSubcontractorsModal({
         city: city || undefined,
         tradeKeyword: trade || undefined,
         monthsBack,
+        sources: enabledSources,
       });
       if (!r.success) {
         setError(r.error || "Discovery failed");
         setResults(null);
       } else {
         setResults(r);
-        setActiveTab("merged");
+        setActiveTab(enabledSources.length === 1
+          ? ({ subawards: "subawards", primes: "primes", sam: "sam", places: "places" } as const)[enabledSources[0]]
+          : "merged");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Discovery failed");
     } finally {
       setLoading(false);
     }
-  }, [naicsInput, state, city, trade, monthsBack]);
+  }, [naicsInput, state, city, trade, monthsBack, sources]);
 
   const tabItems = useMemo<DiscoveredSubItem[]>(() => {
     if (!results) return [];
@@ -190,39 +204,78 @@ export default function DiscoverSubcontractorsModal({
         </div>
 
         {/* Search bar */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 px-3 py-3 border-b border-slate-200 bg-white">
-          <input
-            value={naicsInput}
-            onChange={(e) => setNaicsInput(e.target.value)}
-            placeholder="NAICS codes (comma sep) e.g. 561730, 561740"
-            className="md:col-span-2 px-2.5 py-1.5 text-xs rounded border border-slate-300"
-          />
-          <input
-            value={state}
-            onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
-            placeholder="State (e.g. MN)"
-            className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
-          />
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City (optional)"
-            className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
-          />
-          <input
-            value={trade}
-            onChange={(e) => setTrade(e.target.value)}
-            placeholder="Trade keyword (e.g. lawn maintenance)"
-            className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
-          />
-          <button
-            onClick={runDiscovery}
-            disabled={loading}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white"
-          >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            {loading ? "Searching..." : "Discover"}
-          </button>
+        <div className="px-3 py-3 border-b border-slate-200 bg-white space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+            <input
+              value={naicsInput}
+              onChange={(e) => setNaicsInput(e.target.value)}
+              placeholder="NAICS codes (comma sep) e.g. 561730, 561740"
+              className="md:col-span-2 px-2.5 py-1.5 text-xs rounded border border-slate-300"
+            />
+            <input
+              value={state}
+              onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
+              placeholder="State (e.g. MN)"
+              className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
+            />
+            <input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="City (optional)"
+              className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
+            />
+            <input
+              value={trade}
+              onChange={(e) => setTrade(e.target.value)}
+              placeholder="Trade keyword (e.g. lawn maintenance)"
+              className="px-2.5 py-1.5 text-xs rounded border border-slate-300"
+            />
+            <button
+              onClick={runDiscovery}
+              disabled={loading}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white"
+            >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+              {loading ? "Searching..." : "Discover"}
+            </button>
+          </div>
+
+          {/* Source toggles */}
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="font-semibold text-slate-600 mr-1">Search in:</span>
+            {([
+              { key: "subawards", label: "Past Federal Subs", hint: "USASpending sub-awards" },
+              { key: "primes",    label: "Past Prime Winners", hint: "USASpending prime awards" },
+              { key: "sam",       label: "SAM.gov Vendors",   hint: "Registered federal vendors" },
+              { key: "places",    label: "Google Places",     hint: "Local businesses by trade keyword" },
+            ] as { key: DiscoverSource; label: string; hint: string }[]).map((s) => {
+              const active = sources[s.key];
+              return (
+                <label
+                  key={s.key}
+                  title={s.hint}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border cursor-pointer select-none ${
+                    active
+                      ? "bg-blue-50 border-blue-300 text-blue-900"
+                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => setSources((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
+                    className="w-3 h-3"
+                  />
+                  {s.label}
+                </label>
+              );
+            })}
+            {sources.places && !trade.trim() && (
+              <span className="ml-1 text-amber-700 text-[10px]">
+                ⚠ Google Places needs a trade keyword
+              </span>
+            )}
+          </div>
         </div>
 
         {error && (

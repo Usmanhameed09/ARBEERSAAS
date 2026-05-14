@@ -953,12 +953,15 @@ export async function deleteSubcontractor(id: string): Promise<boolean> {
   return Boolean(data.success);
 }
 
+export type DiscoverSource = "subawards" | "primes" | "sam" | "places";
+
 export interface DiscoverParams {
   naicsCodes: string[];
   state: string;
   city?: string;
   tradeKeyword?: string;
   monthsBack?: number;
+  sources?: DiscoverSource[];   // omit/empty = all four
 }
 
 export async function discoverSubcontractors(params: DiscoverParams): Promise<DiscoverResponse> {
