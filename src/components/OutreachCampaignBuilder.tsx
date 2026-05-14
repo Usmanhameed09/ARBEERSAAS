@@ -67,7 +67,6 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
     setError(null);
     try {
       const c = await createCampaign(form);
-      if (!c) throw new Error("Failed to create campaign");
       setCampaignId(c.id);
       const m = await matchCampaignSubs(c.id, 50);
       setMatches(m);

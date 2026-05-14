@@ -1124,14 +1124,21 @@ export interface CampaignCreateInput {
   step3DelayDays?: number;
 }
 
-export async function createCampaign(input: CampaignCreateInput): Promise<OutreachCampaign | null> {
+export async function createCampaign(input: CampaignCreateInput): Promise<OutreachCampaign> {
   const resp = await fetch(`${API_BASE}/outreach/campaigns`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(input),
   });
-  const data = await resp.json();
-  return data.success ? (data.campaign as OutreachCampaign) : null;
+  if (resp.status === 401 || resp.status === 403) {
+    throw new Error("Your session expired — please log out and log back in.");
+  }
+  let data: { success?: boolean; campaign?: OutreachCampaign; error?: string; detail?: string } = {};
+  try { data = await resp.json(); } catch { /* non-JSON response */ }
+  if (!resp.ok || !data.success || !data.campaign) {
+    throw new Error(data.error || data.detail || `Create campaign failed (HTTP ${resp.status})`);
+  }
+  return data.campaign;
 }
 
 export interface MatchedSub extends SubcontractorRecord {
