@@ -19,6 +19,8 @@ export default function OutreachSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState("");
+  const [testCc, setTestCc] = useState("");
+  const [testBcc, setTestBcc] = useState("");
   const [savedAt, setSavedAt] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; provider?: string; error?: string } | null>(null);
@@ -46,6 +48,10 @@ export default function OutreachSettingsPage() {
         dailySendCap: s.dailySendCap || 50,
         step2DelayDays: s.step2DelayDays ?? 3,
         step3DelayDays: s.step3DelayDays ?? 6,
+        defaultCcEmails: s.defaultCcEmails || [],
+        defaultBccEmails: s.defaultBccEmails || [],
+        notifyOnNewFollowup: s.notifyOnNewFollowup ?? true,
+        notifyEmail: s.notifyEmail || "",
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
@@ -79,7 +85,11 @@ export default function OutreachSettingsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const r = await outreachTestSend(testTo);
+      const split = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+      const r = await outreachTestSend(testTo, {
+        cc: testCc.trim() ? split(testCc) : undefined,
+        bcc: testBcc.trim() ? split(testBcc) : undefined,
+      });
       setTestResult(r);
     } catch (e) {
       setTestResult({ ok: false, error: e instanceof Error ? e.message : "Test failed" });
@@ -140,6 +150,38 @@ export default function OutreachSettingsPage() {
             </Field>
             <Field label="Company / signature line" full>
               <input className={inputCls} value={form.senderSignature || ""} onChange={(e) => update("senderSignature", e.target.value)} placeholder="ARBER LLC" />
+            </Field>
+          </div>
+        </Section>
+
+        {/* DEFAULT CC / BCC + NOTIFICATIONS */}
+        <Section title="Default CC / BCC + Notifications" icon={<Send className="w-4 h-4" />}
+          description="CC/BCC every outreach send (campaigns + follow-up replies). Get an email when a sub replies and a draft is ready for you to review.">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Default CC (comma-separated emails)" full>
+              <input className={inputCls}
+                value={(form.defaultCcEmails || []).join(", ")}
+                onChange={(e) => update("defaultCcEmails", e.target.value.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))}
+                placeholder="manager@company.com, ops@company.com" />
+            </Field>
+            <Field label="Default BCC" full>
+              <input className={inputCls}
+                value={(form.defaultBccEmails || []).join(", ")}
+                onChange={(e) => update("defaultBccEmails", e.target.value.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))}
+                placeholder="archive@company.com" />
+            </Field>
+            <Field label="Notify me when a follow-up draft is ready">
+              <select className={inputCls}
+                value={form.notifyOnNewFollowup === false ? "off" : "on"}
+                onChange={(e) => update("notifyOnNewFollowup", e.target.value === "on")}>
+                <option value="on">On — email me</option>
+                <option value="off">Off</option>
+              </select>
+            </Field>
+            <Field label="Notification email (defaults to Sender email)">
+              <input className={inputCls} value={form.notifyEmail || ""}
+                onChange={(e) => update("notifyEmail", e.target.value)}
+                placeholder={form.senderEmail || "leave blank to use Sender email"} />
             </Field>
           </div>
         </Section>
@@ -252,12 +294,18 @@ export default function OutreachSettingsPage() {
 
         {/* TEST SEND */}
         <Section title="Test Email Send" icon={<Send className="w-4 h-4" />} description="Send a test email to verify your SendGrid or SMTP credentials are working.">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Field label="Send test to (email address)">
-                <input className={inputCls} value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="your-email@example.com" />
-              </Field>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Field label="To *">
+              <input className={inputCls} value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="your-email@example.com" />
+            </Field>
+            <Field label="CC (optional)">
+              <input className={inputCls} value={testCc} onChange={(e) => setTestCc(e.target.value)} placeholder="cc@example.com" />
+            </Field>
+            <Field label="BCC (optional)">
+              <input className={inputCls} value={testBcc} onChange={(e) => setTestBcc(e.target.value)} placeholder="bcc@example.com" />
+            </Field>
+          </div>
+          <div className="mt-2">
             <button onClick={handleTestSend} disabled={testing || !testTo} className="flex items-center gap-1 px-3 py-2 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white">
               {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send test
             </button>

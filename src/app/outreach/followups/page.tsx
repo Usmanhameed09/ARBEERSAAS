@@ -43,6 +43,8 @@ export default function FollowupsPage() {
   // Editable fields
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editCc, setEditCc] = useState("");
+  const [editBcc, setEditBcc] = useState("");
 
   // Attachment picker
   const [options, setOptions] = useState<FollowupAttachmentOptions | null>(null);
@@ -83,6 +85,8 @@ export default function FollowupsPage() {
         setDetail(d);
         setEditSubject(d.suggestedSubject || "");
         setEditBody(d.suggestedBody || "");
+        setEditCc("");
+        setEditBcc("");
       }
       setOptions(opts);
       setPicked({});
@@ -129,11 +133,14 @@ export default function FollowupsPage() {
     setError(null);
     setSendResult(null);
     try {
+      const splitAddrs = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
       const r = await sendFollowupDraft(detail.id, {
         subject: editSubject,
         body: editBody,
         attachments: Object.values(picked).map(({ source, refId }) => ({ source, refId })),
         uploads: uploads.map((u) => ({ filename: u.filename, base64: u.base64, mimeType: u.mimeType })),
+        cc: editCc.trim() ? splitAddrs(editCc) : undefined,
+        bcc: editBcc.trim() ? splitAddrs(editBcc) : undefined,
       });
       if (r.success) {
         setSendResult(`Sent via ${r.provider} with ${r.attachments || 0} attachment(s).`);
@@ -274,6 +281,20 @@ export default function FollowupsPage() {
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject</label>
                 <input value={editSubject} onChange={(e) => setEditSubject(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded" />
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">CC <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input value={editCc} onChange={(e) => setEditCc(e.target.value)}
+                    placeholder="email@co.com, other@co.com"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">BCC <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input value={editBcc} onChange={(e) => setEditBcc(e.target.value)}
+                    placeholder="archive@co.com"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
+                </div>
               </div>
               <div className="mb-3">
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">Body (AI draft — edit freely)</label>

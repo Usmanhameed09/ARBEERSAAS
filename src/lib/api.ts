@@ -1004,6 +1004,12 @@ export interface OutreachSettings {
   dailySendCap?: number;
   step2DelayDays?: number;
   step3DelayDays?: number;
+  // Default cc / bcc applied to every outreach send (campaign + test + auto-reply)
+  defaultCcEmails?: string[];
+  defaultBccEmails?: string[];
+  // Notify Arthur when a follow-up draft is queued
+  notifyOnNewFollowup?: boolean;
+  notifyEmail?: string | null;
   // Booleans indicating whether the encrypted secret is set (we never expose values)
   sendgrid_api_keySet?: boolean;
   smtp_passwordSet?: boolean;
@@ -1035,11 +1041,11 @@ export async function updateOutreachSettings(patch: OutreachSettingsInput): Prom
   return Boolean(data.success);
 }
 
-export async function outreachTestSend(to: string): Promise<{ ok: boolean; provider?: string; error?: string }> {
+export async function outreachTestSend(to: string, opts?: { cc?: string[]; bcc?: string[] }): Promise<{ ok: boolean; provider?: string; error?: string }> {
   const resp = await fetch(`${API_BASE}/outreach/test-send`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ to }),
+    body: JSON.stringify({ to, cc: opts?.cc, bcc: opts?.bcc }),
   });
   const data = await resp.json();
   return { ok: Boolean(data.success), provider: data.provider, error: data.error };
@@ -1063,6 +1069,8 @@ export interface OutreachCampaign {
   naicsCode?: string | null;
   step2DelayDays?: number;
   step3DelayDays?: number;
+  ccEmails?: string[];
+  bccEmails?: string[];
   createdAt?: string;
   closedAt?: string | null;
 }
@@ -1122,6 +1130,8 @@ export interface CampaignCreateInput {
   naicsCode?: string;
   step2DelayDays?: number;
   step3DelayDays?: number;
+  ccEmails?: string[];
+  bccEmails?: string[];
 }
 
 export async function createCampaign(input: CampaignCreateInput): Promise<OutreachCampaign> {
@@ -1282,6 +1292,8 @@ export interface SendFollowupInput {
   body?: string;
   attachments?: { source: string; refId: string }[];
   uploads?: { filename: string; base64: string; mimeType: string }[];
+  cc?: string[];
+  bcc?: string[];
 }
 
 export async function sendFollowupDraft(id: string, input: SendFollowupInput): Promise<{ success: boolean; provider?: string; attachments?: number; error?: string }> {

@@ -255,6 +255,29 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
                     <p className="col-span-2 text-[10px] text-slate-500">
                       Only sends if the sub hasn&apos;t replied yet. Defaults from Outreach Settings.
                     </p>
+
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        CC <span className="text-slate-400 font-normal">(comma-separated emails — every send on this campaign carbon-copies these)</span>
+                      </label>
+                      <input
+                        value={(form.ccEmails || []).join(", ")}
+                        onChange={(e) => update("ccEmails", e.target.value.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))}
+                        placeholder="manager@company.com, ops@company.com"
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        BCC <span className="text-slate-400 font-normal">(blind copy — sub won&apos;t see these)</span>
+                      </label>
+                      <input
+                        value={(form.bccEmails || []).join(", ")}
+                        onChange={(e) => update("bccEmails", e.target.value.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))}
+                        placeholder="archive@company.com"
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
