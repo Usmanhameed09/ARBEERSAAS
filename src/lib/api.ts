@@ -1103,7 +1103,43 @@ export interface CampaignDetailResponse {
     bounced_at?: string | null;
     provider: string;
   }>;
+  timeline?: TimelineEvent[];
 }
+
+export type TimelineEvent =
+  | {
+      kind: "outbound";
+      ts: string;
+      subject?: string | null;
+      fromEmail?: string | null;
+      toEmail?: string | null;
+      purpose?: "campaign" | "auto_reply" | "test" | string | null;
+      recipientId?: string | null;
+      subcontractorId?: string | null;
+    }
+  | {
+      kind: "inbound";
+      ts: string;
+      classification?: string | null;
+      replyExcerpt?: string | null;
+      recipientId?: string | null;
+      subcontractorId?: string | null;
+      draftId?: string | null;
+      draftStatus?: "pending" | "sent" | "dismissed" | string | null;
+      draftSubject?: string | null;
+    }
+  | {
+      kind: "draft";
+      ts: string;
+      draftId: string;
+      draftStatus?: "pending" | "sent" | "dismissed" | string | null;
+      draftSubject?: string | null;
+      draftBody?: string | null;
+      classification?: string | null;
+      recipientId?: string | null;
+      subcontractorId?: string | null;
+      sentAt?: string | null;
+    };
 
 export async function listCampaigns(): Promise<OutreachCampaign[]> {
   const resp = await fetch(`${API_BASE}/outreach/campaigns`, { headers: getAuthHeaders() });
