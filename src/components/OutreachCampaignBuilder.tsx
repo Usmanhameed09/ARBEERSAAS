@@ -15,9 +15,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Loader2, Search, Send, ShieldAlert, CheckCircle2, AlertCircle, Mail, Phone, Award,
+  Sparkles, ChevronDown, ChevronRight,
 } from "lucide-react";
 import {
   createCampaign, matchCampaignSubs, setCampaignRecipients, launchCampaign,
+  generateOutreachBrief,
   type CampaignCreateInput, type MatchedSub, type LaunchCampaignResult,
 } from "@/lib/api";
 
@@ -37,6 +39,8 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
 
   // Step 1 — form
   const [form, setForm] = useState<CampaignCreateInput>({});
+  const [generatingBrief, setGeneratingBrief] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   useEffect(() => {
     if (open) {
       setForm({ ...defaults });
@@ -45,8 +49,35 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
       setMatches([]);
       setSelected({});
       setLaunchResult(null);
+      setShowAdvanced(false);
     }
   }, [open, defaults]);
+
+  const handleGenerateBrief = useCallback(async () => {
+    setGeneratingBrief(true);
+    setError(null);
+    try {
+      const brief = await generateOutreachBrief({
+        opportunityTitle: defaults.opportunityTitle || form.opportunityTitle,
+        opportunityAgency: defaults.opportunityAgency || form.opportunityAgency,
+        naicsCode: form.naicsCode,
+        tradeRequired: form.tradeRequired,
+        locationCity: form.locationCity,
+        locationState: form.locationState,
+        deadlineDate: form.deadlineDate,
+        longScope: form.scopeSummary,  // pass current text as additional context
+      });
+      if (brief) {
+        setForm((p) => ({ ...p, scopeSummary: brief }));
+      } else {
+        setError("Couldn't generate summary — fill in the trade and location, then try again.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Generate failed");
+    } finally {
+      setGeneratingBrief(false);
+    }
+  }, [defaults.opportunityTitle, defaults.opportunityAgency, form.opportunityTitle, form.opportunityAgency, form.naicsCode, form.tradeRequired, form.locationCity, form.locationState, form.deadlineDate, form.scopeSummary]);
 
   // Step 2 — match
   const [campaignId, setCampaignId] = useState<string | null>(null);
@@ -148,8 +179,18 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
           {step === "form" && (
             <div className="p-4 grid grid-cols-2 gap-3 max-w-3xl">
               <div className="col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Scope summary (1-2 sentences)</label>
-                <textarea value={form.scopeSummary || ""} onChange={(e) => update("scopeSummary", e.target.value)} rows={3}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-700">
+                    Project summary <span className="text-slate-400 font-normal">(2-3 sentences — appears in Step 1 email)</span>
+                  </label>
+                  <button type="button" onClick={handleGenerateBrief} disabled={generatingBrief || !form.tradeRequired}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-40">
+                    {generatingBrief ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {generatingBrief ? "Generating..." : (form.scopeSummary ? "Regenerate with AI" : "Generate with AI")}
+                  </button>
+                </div>
+                <textarea value={form.scopeSummary || ""} onChange={(e) => update("scopeSummary", e.target.value)} rows={4}
+                  placeholder="Click 'Generate with AI' to draft a brief summary, or write your own."
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
               </div>
               <div>
@@ -178,15 +219,44 @@ export default function OutreachCampaignBuilder({ open, onClose, defaults, onLau
                 <input type="date" value={form.deadlineDate || ""} onChange={(e) => update("deadlineDate", e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Step 2 delay (days)</label>
-                <input type="number" value={form.step2DelayDays ?? 3} onChange={(e) => update("step2DelayDays", parseInt(e.target.value) || 3)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Step 3 delay (days)</label>
-                <input type="number" value={form.step3DelayDays ?? 6} onChange={(e) => update("step3DelayDays", parseInt(e.target.value) || 6)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
+
+              {/* Follow-up cadence note + Advanced expander */}
+              <div className="col-span-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setShowAdvanced((v) => !v)}
+                  className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900">
+                  {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Advanced (follow-up cadence)
+                </button>
+                {!showAdvanced && (
+                  <p className="text-[11px] text-slate-500 mt-1 ml-4">
+                    Step 1 sends now. Follow-ups go out automatically using your default cadence
+                    ({form.step2DelayDays ?? 3} and {form.step3DelayDays ?? 6} days later).
+                    Auto-stops when the sub replies.
+                  </p>
+                )}
+                {showAdvanced && (
+                  <div className="grid grid-cols-2 gap-3 mt-2 ml-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Days until follow-up #1
+                      </label>
+                      <input type="number" min={1} max={30} value={form.step2DelayDays ?? 3}
+                        onChange={(e) => update("step2DelayDays", parseInt(e.target.value) || 3)}
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Days until follow-up #2
+                      </label>
+                      <input type="number" min={1} max={60} value={form.step3DelayDays ?? 6}
+                        onChange={(e) => update("step3DelayDays", parseInt(e.target.value) || 6)}
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded" />
+                    </div>
+                    <p className="col-span-2 text-[10px] text-slate-500">
+                      Only sends if the sub hasn&apos;t replied yet. Defaults from Outreach Settings.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

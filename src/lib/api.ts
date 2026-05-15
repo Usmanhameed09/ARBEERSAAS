@@ -1198,6 +1198,25 @@ export async function closeCampaign(campaignId: string, reason = "manual"): Prom
   return Boolean(data.success);
 }
 
+export async function generateOutreachBrief(input: {
+  opportunityTitle?: string;
+  opportunityAgency?: string;
+  naicsCode?: string;
+  tradeRequired?: string;
+  locationCity?: string;
+  locationState?: string;
+  deadlineDate?: string;
+  longScope?: string;
+}): Promise<string | null> {
+  const resp = await fetch(`${API_BASE}/outreach/generate-brief`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input),
+  });
+  const data = await resp.json();
+  return data.success ? (data.brief as string) : null;
+}
+
 // ============================================================================
 // OUTREACH — AI-drafted follow-up replies (Pending Follow-ups inbox)
 // ============================================================================
