@@ -87,6 +87,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ...(t || token ? { Authorization: `Bearer ${t || token}` } : {}),
   }), [token]);
 
+  // ── Silent token refresh ───────────────────────────────────────────────
+  // Backend issues a Supabase refresh_token at login. We schedule a refresh
+  // ~2 min before the access_token would expire so users don't get bounced
+  // out mid-session. Falls back to re-login only if the refresh fails.
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
+    const rt = localStorage.getItem("arber_refresh_token");
+    if (!rt) return false;
+    try {
+      const resp = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!resp.ok) {
+        // Refresh token expired or revoked — force re-login next request
+        localStorage.removeItem("arber_refresh_token");
+        localStorage.removeItem("arber_token_expires_at");
+        return false;
+      }
+      const data = await resp.json();
+      const newAccess = data.access_token as string;
+      const newRefresh = data.refresh_token as string;
+      const expiresIn = (data.expires_in as number) || 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
+      setToken(newAccess);
+      localStorage.setItem("arber_token", newAccess);
+      localStorage.setItem("arber_refresh_token", newRefresh);
+      localStorage.setItem("arber_token_expires_at", String(expiresAt));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Schedule the next silent refresh based on stored expiry
+  useEffect(() => {
+    if (!token) return;
+    const expiresAtStr = localStorage.getItem("arber_token_expires_at");
+    if (!expiresAtStr) return;
+    const expiresAt = parseInt(expiresAtStr, 10) || 0;
+    // Fire 2 min before expiry, with a 10s floor and 30 min ceiling
+    const msUntilRefresh = Math.max(10_000, Math.min(expiresAt - Date.now() - 120_000, 30 * 60 * 1000));
+    const handle = window.setTimeout(() => { void refreshAccessToken(); }, msUntilRefresh);
+    return () => window.clearTimeout(handle);
+  }, [token, refreshAccessToken]);
+
   // Fetch company profile
   const refreshProfile = useCallback(async (t?: string) => {
     try {
@@ -120,34 +166,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const cachedProfile = localStorage.getItem("arber_profile");
         if (cachedProfile) setCompanyProfile(JSON.parse(cachedProfile));
 
-        // Verify token is still valid & refresh profile from DB
-        fetch(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${savedToken}` },
-        }).then(async (resp) => {
-          if (resp.ok) {
-            const me = await resp.json();
-            const updatedUser = {
-              id: me.id,
-              email: me.email,
-              fullName: me.full_name,
-              jobTitle: me.job_title,
-              phone: me.phone,
-            };
-            setUser(updatedUser);
-            localStorage.setItem("arber_user", JSON.stringify(updatedUser));
-            refreshProfile(savedToken);
-          } else {
-            // Token expired
-            localStorage.removeItem("arber_token");
-            localStorage.removeItem("arber_user");
-            localStorage.removeItem("arber_profile");
-            setToken(null);
-            setUser(null);
-            setCompanyProfile(null);
+        // Verify token is still valid & refresh profile from DB.
+        // If expired but we have a refresh_token, do a silent refresh first.
+        const verify = async (accessToken: string): Promise<Response> =>
+          fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+        (async () => {
+          try {
+            let resp = await verify(savedToken);
+            if (resp.status === 401 && localStorage.getItem("arber_refresh_token")) {
+              const refreshed = await refreshAccessToken();
+              if (refreshed) {
+                const newAccess = localStorage.getItem("arber_token") || "";
+                resp = await verify(newAccess);
+              }
+            }
+            if (resp.ok) {
+              const me = await resp.json();
+              const updatedUser = {
+                id: me.id,
+                email: me.email,
+                fullName: me.full_name,
+                jobTitle: me.job_title,
+                phone: me.phone,
+              };
+              setUser(updatedUser);
+              localStorage.setItem("arber_user", JSON.stringify(updatedUser));
+              refreshProfile(localStorage.getItem("arber_token") || savedToken);
+            } else {
+              // Refresh failed too — drop credentials
+              localStorage.removeItem("arber_token");
+              localStorage.removeItem("arber_refresh_token");
+              localStorage.removeItem("arber_token_expires_at");
+              localStorage.removeItem("arber_user");
+              localStorage.removeItem("arber_profile");
+              setToken(null);
+              setUser(null);
+              setCompanyProfile(null);
+            }
+          } catch {
+            // Offline — keep cached data
+          } finally {
+            setIsLoading(false);
           }
-        }).catch(() => {
-          // Offline — keep cached data
-        }).finally(() => setIsLoading(false));
+        })();
       } catch {
         setIsLoading(false);
       }
@@ -180,6 +242,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("arber_token", data.access_token);
     localStorage.setItem("arber_user", JSON.stringify(newUser));
     localStorage.setItem("arber_login_type", "password");
+    if (data.refresh_token) {
+      localStorage.setItem("arber_refresh_token", data.refresh_token);
+    }
+    if (data.expires_in) {
+      const expiresAt = Date.now() + Number(data.expires_in) * 1000;
+      localStorage.setItem("arber_token_expires_at", String(expiresAt));
+    }
 
     // Fetch profile
     await refreshProfile(data.access_token);
@@ -225,6 +294,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("arber_token", result.access_token);
     localStorage.setItem("arber_user", JSON.stringify(newUser));
     localStorage.setItem("arber_login_type", "password");
+    if (result.refresh_token) {
+      localStorage.setItem("arber_refresh_token", result.refresh_token);
+    }
+    if (result.expires_in) {
+      const expiresAt = Date.now() + Number(result.expires_in) * 1000;
+      localStorage.setItem("arber_token_expires_at", String(expiresAt));
+    }
 
     await refreshProfile(result.access_token);
   };
@@ -238,6 +314,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setCompanyProfile(null);
     localStorage.removeItem("arber_token");
+    localStorage.removeItem("arber_refresh_token");
+    localStorage.removeItem("arber_token_expires_at");
     localStorage.removeItem("arber_user");
     localStorage.removeItem("arber_profile");
     localStorage.removeItem("arber_opportunities");
