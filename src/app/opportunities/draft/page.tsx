@@ -2937,16 +2937,19 @@ export default function DraftViewerPage() {
                   <SectionContent content={getContent(currentSection?.key || "")} />
                 )}
 
-                {/* Excel Pricing Download — show whenever the backend
-                    pre-filled the template (pricingExcel) OR the legacy
-                    attachmentAnalysis path detected a spreadsheet template. */}
+                {/* Excel Pricing Download — show ONLY when the source RFP
+                    actually included an xlsx template that we filled in.
+                    The synthetic engine-generated Excel (source: "generated")
+                    is kept available for the Trello attachment flow but is
+                    NOT shown as a "filled" template in the UI — that would be
+                    misleading on opportunities that don't ship an xlsx. */}
                 {currentSection?.key === "clinData" && (
-                  data?.pricingExcel?.base64 ||
+                  (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") ||
                   (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl)
                 ) && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet {data?.pricingExcel?.base64 ? "Filled" : "Detected"}</p>
+                      <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet {data?.pricingExcel?.source === "template_filled" ? "Filled" : "Detected"}</p>
                       <p className="text-[10px] text-blue-600 mt-0.5">
                         Source: {data?.pricingExcel?.filename || data?.attachmentAnalysis?.pricingFormatSource || "Solicitation attachment"}
                       </p>
