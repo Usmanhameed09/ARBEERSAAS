@@ -2859,20 +2859,27 @@ export default function DraftViewerPage() {
                   // ── CLIN section: ALWAYS try table first, never show raw array ──
                   (() => {
                     // When the solicitation included an xlsx pricing template
-                    // and we successfully filled it, that filled xlsx IS the
-                    // pricing schedule the contracting officer expects. Showing
-                    // an in-app CLIN table alongside it can confuse readers
-                    // (and any drift between the two undermines trust). Just
-                    // show a clean notice + the Download Filled Excel button.
-                    if (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") {
+                    // (either pre-filled by the backend during generation OR
+                    // just detected as an attachment), that file IS the
+                    // pricing schedule the contracting officer expects. The
+                    // on-demand download below re-fills it from the source.
+                    // Showing an in-app CLIN table alongside it just creates
+                    // a drift surface and confuses the reader.
+                    const hasXlsxPricing =
+                      (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") ||
+                      (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl);
+                    if (hasXlsxPricing) {
+                      const sourceName =
+                        data?.pricingExcel?.filename
+                        || data?.attachmentAnalysis?.pricingFormatSource
+                        || "a pricing template";
                       return (
                         <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-6 text-center">
                           <DollarSign className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                           <h3 className="text-sm font-bold text-blue-900 mb-1">Pricing is in the attached spreadsheet</h3>
                           <p className="text-[12px] text-blue-700 max-w-md mx-auto">
-                            The solicitation provided <strong>{data.pricingExcel.filename || "a pricing template"}</strong>,
-                            which we've filled in with your rates. Submit that file as your CLIN pricing schedule —
-                            it&apos;s the authoritative version. Use the download button below.
+                            The solicitation provided <strong>{sourceName}</strong>. Submit that file as your CLIN pricing schedule —
+                            it&apos;s the authoritative version. Use the download button below to get the filled copy.
                           </p>
                         </div>
                       );
