@@ -2858,6 +2858,27 @@ export default function DraftViewerPage() {
                 ) : currentSection?.key === "clinData" ? (
                   // ── CLIN section: ALWAYS try table first, never show raw array ──
                   (() => {
+                    // When the solicitation included an xlsx pricing template
+                    // and we successfully filled it, that filled xlsx IS the
+                    // pricing schedule the contracting officer expects. Showing
+                    // an in-app CLIN table alongside it can confuse readers
+                    // (and any drift between the two undermines trust). Just
+                    // show a clean notice + the Download Filled Excel button.
+                    if (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") {
+                      return (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-6 text-center">
+                          <DollarSign className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                          <h3 className="text-sm font-bold text-blue-900 mb-1">Pricing is in the attached spreadsheet</h3>
+                          <p className="text-[12px] text-blue-700 max-w-md mx-auto">
+                            The solicitation provided <strong>{data.pricingExcel.filename || "a pricing template"}</strong>,
+                            which we've filled in with your rates. Submit that file as your CLIN pricing schedule —
+                            it&apos;s the authoritative version. Use the download button below.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    // No xlsx template — render the in-app CLIN table.
                     // Try every possible source to get parseable CLIN data
                     const sources = [
                       getContent("clinData"),
