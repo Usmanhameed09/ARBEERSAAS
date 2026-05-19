@@ -66,6 +66,14 @@ export default function OpportunityCard({
         </div>
       )}
 
+      {/* MANUAL UPLOAD badge — distinguishes opportunities the user uploaded
+          themselves (received by email) from SAM-scanned ones. */}
+      {opportunity.noticeId?.startsWith("MANUAL-") && (
+        <div className="absolute top-3 right-3 z-10 px-2 py-0.5 bg-violet-600 text-white text-[10px] font-bold uppercase rounded-md tracking-wider">
+          MANUAL
+        </div>
+      )}
+
       {/* Bid Type label - top left prominent */}
       {bidType && bidTypeStyle && (
         <div

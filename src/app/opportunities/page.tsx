@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, Radar, Archive, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Search, Radar, Archive, Trash2, Upload } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { NAICS_CODES } from "@/data/opportunities";
 import {
@@ -333,18 +334,27 @@ function OpportunitiesContent() {
             )}
           </p>
         </div>
-        {(hasResults || archivedOpportunities.length > 0 || !!searchQuery) && (
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by solicitation #, title, agency..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
-            />
-          </div>
-        )}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Link
+            href="/opportunities/upload"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 shrink-0"
+            title="Upload a solicitation received via email (not on SAM.gov)"
+          >
+            <Upload className="w-3.5 h-3.5" /> Upload Solicitation
+          </Link>
+          {(hasResults || archivedOpportunities.length > 0 || !!searchQuery) && (
+            <div className="relative flex-1 sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by solicitation #, title, agency..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white border border-gray-200 text-sm text-gray-700 placeholder-gray-400 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Fetcher Bar */}

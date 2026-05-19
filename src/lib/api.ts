@@ -432,6 +432,70 @@ export async function generateDraftV2(
   }
 }
 
+// ============================================================================
+// MANUAL SOLICITATION UPLOAD — for solicitations emailed directly (not on SAM)
+// ============================================================================
+
+export interface ManualUploadMetadata {
+  title: string;
+  agency: string;
+  naicsCode?: string;
+  setAside?: string;
+  bidType?: "RFQ" | "RFP" | "SOURCES_SOUGHT" | string;
+  dueDate?: string;          // ISO YYYY-MM-DD or YYYY-MM-DDTHH:mm
+  placeOfPerformance?: string;
+  summary?: string;
+}
+
+export interface ManualUploadResponse {
+  success: boolean;
+  error?: string;
+  opportunityId?: string;
+  noticeId?: string;
+  attachmentCount?: number;
+  // Opportunity payload — ready to feed straight into generateDraftV2()
+  opportunity?: Opportunity & { pricingPrediction?: { lowBid: number; predictedBid: number; highBid: number; source?: string } };
+}
+
+/**
+ * Upload solicitation documents received outside SAM/PIEE (e.g. by email).
+ * Backend stores files, creates an opportunity row, and returns a payload
+ * shaped exactly like a SAM-scanned opportunity — pass `response.opportunity`
+ * directly to generateDraftV2() to run the same drafting pipeline.
+ */
+export async function uploadManualSolicitation(
+  metadata: ManualUploadMetadata,
+  files: File[],
+): Promise<ManualUploadResponse> {
+  if (!files.length) return { success: false, error: "Pick at least one file." };
+  const form = new FormData();
+  form.append("title", metadata.title);
+  form.append("agency", metadata.agency);
+  if (metadata.naicsCode) form.append("naics_code", metadata.naicsCode);
+  if (metadata.setAside) form.append("set_aside", metadata.setAside);
+  if (metadata.bidType) form.append("bid_type", metadata.bidType);
+  if (metadata.dueDate) form.append("due_date", metadata.dueDate);
+  if (metadata.placeOfPerformance) form.append("place_of_performance", metadata.placeOfPerformance);
+  if (metadata.summary) form.append("summary", metadata.summary);
+  for (const f of files) form.append("files", f, f.name);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+  try {
+    const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/solicitations/upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => "");
+      return { success: false, error: `Upload failed (${resp.status}): ${txt.slice(0, 300)}` };
+    }
+    return (await resp.json()) as ManualUploadResponse;
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
 /** Generate an RFQ proposal draft via GPT-4o */
 export async function generateDraft(opportunity: Opportunity, selectedPricing?: "low" | "recommended" | "high"): Promise<DraftResult> {
   const controller = new AbortController();
