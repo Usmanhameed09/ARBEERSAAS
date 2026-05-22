@@ -107,24 +107,59 @@ export default function FollowupsPage() {
   };
 
   const onUploadFiles = async (fileList: FileList | null) => {
-    if (!fileList) return;
+    if (!fileList || fileList.length === 0) return;
+    setError(null);
     const newOnes: NewUpload[] = [];
+    const skipped: string[] = [];
+
+    // FileReader.readAsDataURL handles binary files of arbitrary size cleanly.
+    // (The previous approach `btoa(String.fromCharCode(...new Uint8Array(buf)))`
+    // silently broke on anything bigger than ~100KB because the spread operator
+    // hits the browser's argument-count limit — so any real PDF/DOCX failed.)
+    const fileToBase64 = (file: File): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== "string") {
+            reject(new Error("FileReader returned non-string"));
+            return;
+          }
+          // result is "data:<mime>;base64,<payload>" — strip the prefix
+          const comma = result.indexOf(",");
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+        reader.readAsDataURL(file);
+      });
+
     for (const f of Array.from(fileList)) {
       if (f.size > 10 * 1024 * 1024) {
-        setError(`${f.name} is over 10 MB — skipped`);
+        skipped.push(`${f.name} (over 10 MB)`);
         continue;
       }
-      const buf = await f.arrayBuffer();
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-      newOnes.push({
-        id: `${f.name}-${f.size}-${Date.now()}`,
-        filename: f.name,
-        base64: b64,
-        mimeType: f.type || "application/octet-stream",
-        size: f.size,
-      });
+      try {
+        const b64 = await fileToBase64(f);
+        if (!b64) {
+          skipped.push(`${f.name} (empty or unreadable)`);
+          continue;
+        }
+        newOnes.push({
+          id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          filename: f.name,
+          base64: b64,
+          mimeType: f.type || "application/octet-stream",
+          size: f.size,
+        });
+      } catch (err) {
+        skipped.push(`${f.name} (${err instanceof Error ? err.message : "read failed"})`);
+      }
     }
-    setUploads((prev) => [...prev, ...newOnes]);
+
+    if (newOnes.length > 0) setUploads((prev) => [...prev, ...newOnes]);
+    if (skipped.length > 0) {
+      setError(`Skipped ${skipped.length} file${skipped.length === 1 ? "" : "s"}: ${skipped.join(", ")}`);
+    }
   };
 
   const handleSend = async () => {
