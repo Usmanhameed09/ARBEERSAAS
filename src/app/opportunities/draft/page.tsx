@@ -1031,11 +1031,13 @@ export default function DraftViewerPage() {
       // Resolve a source xlsx URL: prefer attachmentAnalysis (when present),
       // else fall back to scanning opportunity.attachments for ANY xlsx.
       // This catches drafts saved before pricingExcel/attachmentAnalysis
-      // metadata was persisted.
+      // metadata was persisted. Cast widens DraftResult.opportunity which
+      // doesn't declare `attachments` in its narrow type.
       let sourceUrl = data?.attachmentAnalysis?.pricingFormatUrl as string | undefined;
       let sourceName = data?.attachmentAnalysis?.pricingFormatSource as string | undefined;
       if (!sourceUrl) {
-        const atts = (data?.opportunity?.attachments || []) as Array<{ name?: string; url?: string; type?: string }>;
+        const oppWide = data?.opportunity as unknown as { attachments?: Array<{ name?: string; url?: string; type?: string }> } | undefined;
+        const atts = oppWide?.attachments || [];
         const xlsxAtt = atts.find((a) => {
           const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
           const tp = (a?.type || "").toUpperCase();
@@ -1829,7 +1831,8 @@ export default function DraftViewerPage() {
       // Gate on persisted metadata first; fall back to detecting an xlsx in
       // the opportunity's attachment list so drafts saved before metadata was
       // persisted still skip the inline table.
-      const pdfAttachments = (data.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+      const pdfOppWide = data.opportunity as unknown as { attachments?: Array<{ name?: string; type?: string }> } | undefined;
+      const pdfAttachments = pdfOppWide?.attachments || [];
       const pdfOppHasXlsx = pdfAttachments.some((a) => {
         const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
         const tp = (a?.type || "").toUpperCase();
@@ -2970,7 +2973,8 @@ export default function DraftViewerPage() {
                     //      had an xlsx pricing template).
                     // base64 isn't required — it's missing on reload but the
                     // download button re-fetches it on demand.
-                    const attachmentsList = (data?.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+                    const oppWide = data?.opportunity as unknown as { attachments?: Array<{ name?: string; type?: string }> } | undefined;
+                    const attachmentsList = oppWide?.attachments || [];
                     const oppHasXlsx = attachmentsList.some((a) => {
                       const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
                       const tp = (a?.type || "").toUpperCase();
@@ -3084,7 +3088,8 @@ export default function DraftViewerPage() {
                     NOT shown as a "filled" template in the UI — that would be
                     misleading on opportunities that don't ship an xlsx. */}
                 {currentSection?.key === "clinData" && (() => {
-                  const atts = (data?.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+                  const oppWide = data?.opportunity as unknown as { attachments?: Array<{ name?: string; type?: string }> } | undefined;
+                  const atts = oppWide?.attachments || [];
                   const oppHasXlsx = atts.some((a) => {
                     const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
                     const tp = (a?.type || "").toUpperCase();
