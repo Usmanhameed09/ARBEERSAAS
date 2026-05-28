@@ -1804,8 +1804,11 @@ export default function DraftViewerPage() {
       // inline CLIN table in the PDF and just add a reference note — the user
       // downloads the auto-filled spreadsheet via the "Download Filled Excel"
       // button on the Pricing section. Applies to BOTH RFQ and RFP.
+      // Gate on persisted metadata, not on base64 (which only exists on the
+      // fresh-generate response and is missing after a draft is reloaded
+      // from the DB). The on-demand download endpoint re-fetches base64.
       const hasExcelPricing =
-        (data.pricingExcel?.base64 && data.pricingExcel?.source === "template_filled") ||
+        data.pricingExcel?.source === "template_filled" ||
         (data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl);
 
       doc.addPage();
@@ -2928,8 +2931,11 @@ export default function DraftViewerPage() {
                     // on-demand download below re-fills it from the source.
                     // Showing an in-app CLIN table alongside it just creates
                     // a drift surface and confuses the reader.
+                    // Gate on metadata, not base64 — base64 is only present on
+                    // the fresh-generate response, not on draft reload. The
+                    // on-demand download below re-fetches base64 when clicked.
                     const hasXlsxPricing =
-                      (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") ||
+                      data?.pricingExcel?.source === "template_filled" ||
                       (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl);
                     if (hasXlsxPricing) {
                       const sourceName =
@@ -3035,7 +3041,7 @@ export default function DraftViewerPage() {
                     NOT shown as a "filled" template in the UI — that would be
                     misleading on opportunities that don't ship an xlsx. */}
                 {currentSection?.key === "clinData" && (
-                  (data?.pricingExcel?.base64 && data?.pricingExcel?.source === "template_filled") ||
+                  data?.pricingExcel?.source === "template_filled" ||
                   (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl)
                 ) && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
