@@ -16,6 +16,7 @@ import {
 import {
   uploadManualSolicitation,
   generateDraftV2,
+  saveDraft,
   type ManualUploadMetadata,
 } from "@/lib/api";
 
@@ -117,21 +118,36 @@ export default function UploadSolicitationPage() {
         setError(draftResp.error || "Draft generation failed");
         return;
       }
-      setPhase("done");
-      // The draft viewer at /opportunities/draft reads from
-      // localStorage["arber_draft_data"] when there's no ?draftId param.
-      // Write the FULL DraftResultV2 there (same key/shape used by the
-      // OpportunityDetailModal happy path) so the viewer picks up THIS draft
-      // — not whatever stale draft is left over from the last session.
-      try {
-        localStorage.setItem("arber_draft_data", JSON.stringify(draftResp));
-      } catch (e) {
-        console.warn("[UPLOAD] localStorage write failed:", e);
+
+      // Persist the draft to the backend FIRST so the viewer can load it
+      // authoritatively by ID. Going through localStorage would let a stale
+      // draft in another tab (or a slow handoff) show the wrong content —
+      // exactly the symptom we were seeing.
+      const oppJson: Record<string, unknown> = { ...(draftResp.opportunity || {}) };
+      if (draftResp.attachmentAnalysis) {
+        oppJson.attachmentAnalysis = draftResp.attachmentAnalysis;
       }
-      // Open in a new tab — matches the existing flow exactly
-      window.open("/opportunities/draft", "_blank");
-      // Reset our own page so the user can do another one if they want
-      setPhase("idle");
+      const saved = await saveDraft({
+        sectionsJson: draftResp.draft as unknown as Record<string, string>,
+        opportunityJson: oppJson,
+        companyJson: (draftResp.company || {}) as Record<string, unknown>,
+        title: draftResp.opportunity?.title || draftResp.draft?.draftTitle || metadata.title,
+      });
+
+      if (!saved.success || !saved.draftId) {
+        // Fall back to localStorage handoff if the save endpoint hiccupped —
+        // user still gets the draft, just less robust against tab collisions.
+        try {
+          localStorage.setItem("arber_draft_data", JSON.stringify(draftResp));
+        } catch { /* ignore */ }
+        window.open("/opportunities/draft", "_blank");
+      } else {
+        // Authoritative path: viewer fetches by ID, no local-storage race.
+        window.open(`/opportunities/draft?draftId=${encodeURIComponent(saved.draftId)}`, "_blank");
+      }
+      setPhase("done");
+      // Reset so user can upload another solicitation if they want
+      setTimeout(() => setPhase("idle"), 1500);
     } catch (e) {
       setPhase("error");
       setError(e instanceof Error ? e.message : "Draft generation failed");
