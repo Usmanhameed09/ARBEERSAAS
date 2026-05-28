@@ -8,7 +8,6 @@
  */
 
 import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Upload, FileText, X, Loader2, AlertCircle, CheckCircle2, Send, ChevronLeft,
@@ -27,8 +26,6 @@ const MAX_FILE_MB = 25;
 type Phase = "idle" | "uploading" | "estimating" | "drafting" | "done" | "error";
 
 export default function UploadSolicitationPage() {
-  const router = useRouter();
-
   // Metadata
   const [title, setTitle] = useState("");
   const [agency, setAgency] = useState("");
@@ -115,24 +112,31 @@ export default function UploadSolicitationPage() {
     setPhase("drafting");
     try {
       const draftResp = await generateDraftV2(uploadResp.opportunity, "recommended");
-      if (!draftResp.success) {
+      if (!draftResp.success || !draftResp.draft) {
         setPhase("error");
         setError(draftResp.error || "Draft generation failed");
         return;
       }
       setPhase("done");
-      // Stash the draft for the viewer (matches existing flow)
+      // The draft viewer at /opportunities/draft reads from
+      // localStorage["arber_draft_data"] when there's no ?draftId param.
+      // Write the FULL DraftResultV2 there (same key/shape used by the
+      // OpportunityDetailModal happy path) so the viewer picks up THIS draft
+      // — not whatever stale draft is left over from the last session.
       try {
-        sessionStorage.setItem("arber_draft_v2_result", JSON.stringify(draftResp));
-      } catch { /* sessionStorage full / disabled — viewer falls back to refetch */ }
-      // Send user to the standard draft viewer
-      const noticeId = uploadResp.noticeId || "";
-      router.push(`/opportunities/draft?notice=${encodeURIComponent(noticeId)}`);
+        localStorage.setItem("arber_draft_data", JSON.stringify(draftResp));
+      } catch (e) {
+        console.warn("[UPLOAD] localStorage write failed:", e);
+      }
+      // Open in a new tab — matches the existing flow exactly
+      window.open("/opportunities/draft", "_blank");
+      // Reset our own page so the user can do another one if they want
+      setPhase("idle");
     } catch (e) {
       setPhase("error");
       setError(e instanceof Error ? e.message : "Draft generation failed");
     }
-  }, [canSubmit, title, agency, naicsCode, setAside, bidType, dueDate, placeOfPerformance, summary, files, router]);
+  }, [canSubmit, title, agency, naicsCode, setAside, bidType, dueDate, placeOfPerformance, summary, files]);
 
   const phaseLabel: Record<Phase, string> = {
     idle: "Ready",
