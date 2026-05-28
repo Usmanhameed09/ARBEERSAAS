@@ -1028,8 +1028,30 @@ export default function DraftViewerPage() {
         return;
       }
 
-      if (!data?.attachmentAnalysis?.pricingFormatUrl) return;
-      const clinContent = getContent("clinData") || data.draft?.clinData || "";
+      // Resolve a source xlsx URL: prefer attachmentAnalysis (when present),
+      // else fall back to scanning opportunity.attachments for ANY xlsx.
+      // This catches drafts saved before pricingExcel/attachmentAnalysis
+      // metadata was persisted.
+      let sourceUrl = data?.attachmentAnalysis?.pricingFormatUrl as string | undefined;
+      let sourceName = data?.attachmentAnalysis?.pricingFormatSource as string | undefined;
+      if (!sourceUrl) {
+        const atts = (data?.opportunity?.attachments || []) as Array<{ name?: string; url?: string; type?: string }>;
+        const xlsxAtt = atts.find((a) => {
+          const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
+          const tp = (a?.type || "").toUpperCase();
+          return (ext === "xlsx" || ext === "xls" || tp === "XLSX" || tp === "XLS" || tp === "EXCEL") && Boolean(a?.url);
+        });
+        if (xlsxAtt?.url) {
+          sourceUrl = xlsxAtt.url;
+          sourceName = xlsxAtt.name;
+        }
+      }
+      if (!sourceUrl) {
+        alert("No source pricing spreadsheet found on this opportunity.");
+        return;
+      }
+
+      const clinContent = getContent("clinData") || data?.draft?.clinData || "";
       let clinParsed: unknown = clinContent;
       try { clinParsed = JSON.parse(clinContent); } catch { /* send as text */ }
 
@@ -1037,10 +1059,10 @@ export default function DraftViewerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("arber_token")}` },
         body: JSON.stringify({
-          sourceUrl: data.attachmentAnalysis.pricingFormatUrl,
+          sourceUrl,
           clinData: clinParsed,
           clinText: clinContent,
-          filename: data.attachmentAnalysis.pricingFormatSource || "Pricing_Schedule.xlsx",
+          filename: sourceName || "Pricing_Schedule.xlsx",
         }),
       });
       const result = await resp.json();
@@ -1804,12 +1826,19 @@ export default function DraftViewerPage() {
       // inline CLIN table in the PDF and just add a reference note — the user
       // downloads the auto-filled spreadsheet via the "Download Filled Excel"
       // button on the Pricing section. Applies to BOTH RFQ and RFP.
-      // Gate on persisted metadata, not on base64 (which only exists on the
-      // fresh-generate response and is missing after a draft is reloaded
-      // from the DB). The on-demand download endpoint re-fetches base64.
+      // Gate on persisted metadata first; fall back to detecting an xlsx in
+      // the opportunity's attachment list so drafts saved before metadata was
+      // persisted still skip the inline table.
+      const pdfAttachments = (data.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+      const pdfOppHasXlsx = pdfAttachments.some((a) => {
+        const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
+        const tp = (a?.type || "").toUpperCase();
+        return ext === "xlsx" || ext === "xls" || tp === "XLSX" || tp === "XLS" || tp === "EXCEL";
+      });
       const hasExcelPricing =
         data.pricingExcel?.source === "template_filled" ||
-        (data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl);
+        (data.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data.attachmentAnalysis?.pricingFormatUrl) ||
+        pdfOppHasXlsx;
 
       doc.addPage();
       addPageHeader(solNum, comp.name);
@@ -2931,12 +2960,26 @@ export default function DraftViewerPage() {
                     // on-demand download below re-fills it from the source.
                     // Showing an in-app CLIN table alongside it just creates
                     // a drift surface and confuses the reader.
-                    // Gate on metadata, not base64 — base64 is only present on
-                    // the fresh-generate response, not on draft reload. The
-                    // on-demand download below re-fetches base64 when clicked.
+                    // Three-way gate, in fallback order:
+                    //   1. pricingExcel.source === "template_filled" — most precise
+                    //   2. attachmentAnalysis says one of the attachments is a
+                    //      pricing spreadsheet
+                    //   3. The opportunity attachment list contains ANY xlsx —
+                    //      catches drafts saved before pricingExcel/attachmentAnalysis
+                    //      metadata was persisted (we still know the source RFP
+                    //      had an xlsx pricing template).
+                    // base64 isn't required — it's missing on reload but the
+                    // download button re-fetches it on demand.
+                    const attachmentsList = (data?.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+                    const oppHasXlsx = attachmentsList.some((a) => {
+                      const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
+                      const tp = (a?.type || "").toUpperCase();
+                      return ext === "xlsx" || ext === "xls" || tp === "XLSX" || tp === "XLS" || tp === "EXCEL";
+                    });
                     const hasXlsxPricing =
                       data?.pricingExcel?.source === "template_filled" ||
-                      (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl);
+                      (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl) ||
+                      oppHasXlsx;
                     if (hasXlsxPricing) {
                       const sourceName =
                         data?.pricingExcel?.filename
@@ -3040,10 +3083,17 @@ export default function DraftViewerPage() {
                     is kept available for the Trello attachment flow but is
                     NOT shown as a "filled" template in the UI — that would be
                     misleading on opportunities that don't ship an xlsx. */}
-                {currentSection?.key === "clinData" && (
-                  data?.pricingExcel?.source === "template_filled" ||
-                  (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl)
-                ) && (
+                {currentSection?.key === "clinData" && (() => {
+                  const atts = (data?.opportunity?.attachments || []) as Array<{ name?: string; type?: string }>;
+                  const oppHasXlsx = atts.some((a) => {
+                    const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
+                    const tp = (a?.type || "").toUpperCase();
+                    return ext === "xlsx" || ext === "xls" || tp === "XLSX" || tp === "XLS" || tp === "EXCEL";
+                  });
+                  return data?.pricingExcel?.source === "template_filled" ||
+                    (data?.attachmentAnalysis?.pricingFormatType === "spreadsheet" && data?.attachmentAnalysis?.pricingFormatUrl) ||
+                    oppHasXlsx;
+                })() && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-blue-800">Pricing Spreadsheet {data?.pricingExcel?.source === "template_filled" ? "Filled" : "Detected"}</p>
