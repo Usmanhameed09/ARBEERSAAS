@@ -520,6 +520,18 @@ export default function DraftViewerPage() {
         if (parsed.attachmentAnalysis) {
           oppJson.attachmentAnalysis = parsed.attachmentAnalysis;
         }
+        // Persist pricingExcel METADATA (filename + source + generated flag)
+        // so the PDF generator knows on reload whether to skip the inline CLIN
+        // table. Strip the heavy `base64` to keep the row small; the
+        // "Download Filled Excel" button re-fetches it on demand.
+        const pe = parsed.pricingExcel;
+        if (pe && (pe.filename || pe.source)) {
+          oppJson.pricingExcel = {
+            filename: pe.filename,
+            source: pe.source,
+            generated: pe.generated,
+          };
+        }
         const result = await saveDraft({
           sectionsJson: parsed.draft as unknown as Record<string, string>,
           opportunityJson: oppJson,
@@ -589,10 +601,16 @@ export default function DraftViewerPage() {
     setSaveStatus("saving");
     try {
       console.log("[triggerSave] saving draft", curDraftId, "sections:", Object.keys(curContent));
-      // Preserve attachmentAnalysis in opportunityJson so it persists
+      // Preserve attachmentAnalysis + pricingExcel metadata in opportunityJson
+      // so they persist across reloads (the PDF generator needs pricingExcel
+      // to decide whether to skip the inline CLIN table).
       const oppJson = { ...(curData.opportunity || {}) } as Record<string, unknown>;
       if (curData.attachmentAnalysis) {
         oppJson.attachmentAnalysis = curData.attachmentAnalysis;
+      }
+      const pe = curData.pricingExcel;
+      if (pe && (pe.filename || pe.source)) {
+        oppJson.pricingExcel = { filename: pe.filename, source: pe.source, generated: pe.generated };
       }
       const result = await saveDraft({
         draftId: curDraftId,
@@ -629,10 +647,14 @@ export default function DraftViewerPage() {
     setSaveStatus("saving");
     try {
       console.log("[saveAsNewVersion] creating new version from", curDraftId);
-      // Preserve attachmentAnalysis in opportunityJson
+      // Preserve attachmentAnalysis + pricingExcel metadata in opportunityJson
       const oppJson2 = { ...(curData.opportunity || {}) } as Record<string, unknown>;
       if (curData.attachmentAnalysis) {
         oppJson2.attachmentAnalysis = curData.attachmentAnalysis;
+      }
+      const pe2 = curData.pricingExcel;
+      if (pe2 && (pe2.filename || pe2.source)) {
+        oppJson2.pricingExcel = { filename: pe2.filename, source: pe2.source, generated: pe2.generated };
       }
       const result = await saveDraft({
         draftId: curDraftId,

@@ -127,6 +127,12 @@ export default function UploadSolicitationPage() {
       if (draftResp.attachmentAnalysis) {
         oppJson.attachmentAnalysis = draftResp.attachmentAnalysis;
       }
+      // Persist pricingExcel metadata so the PDF generator can skip the inline
+      // CLIN table when an xlsx template was filled (matches the SAM flow).
+      const pe = draftResp.pricingExcel;
+      if (pe && (pe.filename || pe.source)) {
+        oppJson.pricingExcel = { filename: pe.filename, source: pe.source, generated: pe.generated };
+      }
       const saved = await saveDraft({
         sectionsJson: draftResp.draft as unknown as Record<string, string>,
         opportunityJson: oppJson,
