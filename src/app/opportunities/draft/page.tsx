@@ -416,10 +416,17 @@ export default function DraftViewerPage() {
     // SECTION_DEFS. These come from add_new_section calls in the chat assistant.
     // We need to: (a) include their content in editedContent, (b) register them
     // in extraSections so the sidebar + PDF render them.
+    // BUT: skip metadata-only fields like `draftTitle` (set by the backend's
+    // response_mapper as the proposal title, not as a real proposal section).
     const knownKeys = new Set(SECTION_DEFS.map((s) => s.key));
+    const METADATA_KEYS = new Set([
+      "draftTitle", "draftId", "_draftId", "version", "status",
+      "createdAt", "updatedAt", "lastSavedAt",
+    ]);
     const orphans: DraftSection[] = [];
     for (const [k, v] of Object.entries(d)) {
       if (knownKeys.has(k)) continue;
+      if (METADATA_KEYS.has(k)) continue;
       if (typeof v !== "string" || !v.trim()) continue;
       initial[k] = v;
       // Humanize the key into a title: "experienceQuestionnaire" → "Experience Questionnaire"
@@ -1719,6 +1726,40 @@ export default function DraftViewerPage() {
         doc.text(isRFQ ? "Quality Control Plan" : "Factor 3 — Quality Control Plan", margin, y);
         y += 10;
         y = writeMultiLine(qcContent, y, 10);
+      }
+
+      // ─── KEY PERSONNEL ──────────────────────────────────────────
+      const keyPersonnelContent = cleanContentForPdf(getContent("keyPersonnel"));
+      if (keyPersonnelContent) {
+        doc.addPage();
+        addPageHeader(solNum, comp.name);
+        y = 22;
+        tocEntries.push({ title: isRFQ ? "Key Personnel" : "Factor 4: Key Personnel", page: doc.getNumberOfPages(), indent: !isRFQ });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(isRFQ ? "Key Personnel" : "Factor 4 — Key Personnel", margin, y);
+        y += 10;
+        y = writeMultiLine(keyPersonnelContent, y, 10);
+      }
+
+      // ─── STAFFING PLAN ──────────────────────────────────────────
+      const staffingContent = cleanContentForPdf(getContent("staffingPlan"));
+      if (staffingContent) {
+        if (!keyPersonnelContent || y + 30 > pageHeight - 20) {
+          doc.addPage();
+          addPageHeader(solNum, comp.name);
+          y = 22;
+        } else {
+          y += 6;
+        }
+        tocEntries.push({ title: isRFQ ? "Staffing Plan" : "Factor 5: Staffing Plan", page: doc.getNumberOfPages(), indent: !isRFQ });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(isRFQ ? "Staffing Plan" : "Factor 5 — Staffing Plan", margin, y);
+        y += 10;
+        y = writeMultiLine(staffingContent, y, 10);
       }
 
       // ─── PAST PERFORMANCE ──────────────────────────────────────
