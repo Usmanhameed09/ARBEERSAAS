@@ -391,7 +391,7 @@ export async function generateDraftV2(
   sectionsOverride?: string[],
 ): Promise<DraftResultV2> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000); // 20 min timeout for v2
+  const timeout = setTimeout(() => controller.abort(), 35 * 60 * 1000); // 35 min timeout for v2 (Gemini section writers on dense SOWs + compliance verify can hit 25-30 min)
   try {
     const body: Record<string, unknown> = {
       opportunity,
@@ -419,7 +419,7 @@ export async function generateDraftV2(
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
-      return { success: false, error: "Request timed out after 20 minutes. Please try again." };
+      return { success: false, error: "Request timed out after 35 minutes. The backend may still be processing — check your Drafts list in a minute. Otherwise please try again." };
     }
     if (err instanceof TypeError && err.message.includes("fetch")) {
       return {
