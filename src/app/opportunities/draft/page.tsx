@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus } from "@/lib/api";
+import { DIRECT_BACKEND_API_BASE } from "@/lib/apiBase";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
 import DraftChatPanel from "@/components/DraftChatPanel";
@@ -1057,7 +1058,13 @@ export default function DraftViewerPage() {
       let clinParsed: unknown = clinContent;
       try { clinParsed = JSON.parse(clinContent); } catch { /* send as text */ }
 
-      const resp = await fetch(`${API_BASE}/draft/fill-pricing-excel`, {
+      // CRITICAL: hit the backend DIRECTLY (bypassing Vercel rewrite). The
+      // fill can take 2-3 minutes on long single-tab templates, and Vercel
+      // serverless functions kill connections at 60s (Hobby) / 300s (Pro+).
+      // The direct path goes browser -> nginx -> backend, with no Vercel
+      // function in the middle, so we get the backend's full 1800s nginx
+      // proxy_read_timeout window.
+      const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/fill-pricing-excel`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("arber_token")}` },
         body: JSON.stringify({
@@ -1072,6 +1079,11 @@ export default function DraftViewerPage() {
           recommendedBid: 0,
         }),
       });
+      if (!resp.ok) {
+        alert(`Fill failed: server returned ${resp.status}. Check console for details.`);
+        console.error("Excel fill HTTP error:", resp.status, await resp.text());
+        return;
+      }
       const result = await resp.json();
       if (result.success && result.excelBase64) {
         const bytes = Uint8Array.from(atob(result.excelBase64), c => c.charCodeAt(0));
@@ -1082,9 +1094,15 @@ export default function DraftViewerPage() {
         a.download = result.filename || "Pricing_Schedule_Filled.xlsx";
         a.click();
         URL.revokeObjectURL(url);
+      } else {
+        // Backend explicitly returned {success: false} — surface the error
+        const errMsg = result.error || "Backend returned no file. The template may have failed to fill.";
+        alert(`Fill failed: ${errMsg}`);
+        console.error("Excel fill backend error:", result);
       }
     } catch (err) {
       console.error("Excel download error:", err);
+      alert(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setExcelDownloading(false);
     }
