@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus,
-         uploadDraftAmendment, deleteDraftAmendment, fetchDraftAmendment, fillSF18 } from "@/lib/api";
+         fetchAttachmentPdf, fillSF18 } from "@/lib/api";
 import { DIRECT_BACKEND_API_BASE } from "@/lib/apiBase";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
@@ -332,8 +332,9 @@ export default function DraftViewerPage() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfModalMode, setPdfModalMode] = useState<"download" | "preview">("download");
   const [pdfOpts, setPdfOpts] = useState({ includeSF18: false, includeAmendment: false });
-  const [amendmentInfo, setAmendmentInfo] = useState<{ fileName: string; sizeBytes: number } | null>(null);
-  const [uploadingAmendment, setUploadingAmendment] = useState(false);
+  // Auto-detected Amendment from the solicitation's attachments — no upload.
+  // `url` is the SAM/source URL the backend uses to download the PDF.
+  const [amendmentInfo, setAmendmentInfo] = useState<{ fileName: string; url: string } | null>(null);
 
   // Draft workspace state
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -559,28 +560,29 @@ export default function DraftViewerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Hydrate amendmentInfo from backend whenever draftId changes. Cheap GET
-  // — backend returns 200 success:false if none uploaded, which we treat
-  // as "no amendment yet" without alerting.
+  // Auto-detect the Amendment by scanning the solicitation's attachments
+  // (the SAM.gov-provided files already in `opp.attachments`). Matches any
+  // PDF whose filename contains "amend" / "modification" / "sf30" / "sf 30".
+  // No upload required — the file is downloaded on demand from the SAM URL
+  // by the backend when the user ticks the checkbox and generates the PDF.
   useEffect(() => {
-    if (!draftId) {
-      setAmendmentInfo(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetchDraftAmendment(draftId);
-        if (cancelled) return;
-        if (r.success && r.fileName) {
-          setAmendmentInfo({ fileName: r.fileName, sizeBytes: r.pdfBase64 ? Math.floor((r.pdfBase64.length * 3) / 4) : 0 });
-        } else {
-          setAmendmentInfo(null);
-        }
-      } catch { /* silent — no amendment is the common case */ }
-    })();
-    return () => { cancelled = true; };
-  }, [draftId]);
+    const oppWide = data?.opportunity as unknown as {
+      attachments?: Array<{ name?: string; url?: string; type?: string }>;
+    } | undefined;
+    const attachments = oppWide?.attachments || [];
+    const isAmendmentLike = (name: string): boolean => {
+      const n = name.toLowerCase();
+      if (!n.endsWith(".pdf")) return false;
+      return (
+        n.includes("amend") ||
+        n.includes("modification") ||
+        n.includes(" mod ") || n.endsWith(" mod.pdf") ||
+        n.includes("sf30") || n.includes("sf 30") || n.includes("sf-30")
+      );
+    };
+    const match = attachments.find((a) => a?.name && a?.url && isAmendmentLike(a.name));
+    setAmendmentInfo(match ? { fileName: match.name!, url: match.url! } : null);
+  }, [data?.opportunity]);
 
   const getContent = useCallback(
     (key: string) => editedContent[key] || "",
@@ -2286,13 +2288,14 @@ export default function DraftViewerPage() {
       }
 
       // ─── AMENDMENT INSERT (after SF1449 if present) ──
-      // User toggled the "Attach signed Amendment" checkbox in the download
-      // modal and previously uploaded a PDF — pull it from the backend and
-      // splice it in at amendmentInsertIdx so it lands right after SF1449
-      // (or right after the cover page if SF1449 wasn't included).
-      if (opts.includeAmendment && draftIdRef.current) {
+      // Auto-detected from the solicitation's attachments (see useEffect that
+      // scans for files containing "amend"/"modification"/"sf30"). When the
+      // user ticks the checkbox in the download modal, we fetch the detected
+      // PDF via the backend (bypasses CORS + uses SAM API key) and splice it
+      // in at amendmentInsertIdx so it lands right after SF1449.
+      if (opts.includeAmendment && amendmentInfo?.url) {
         try {
-          const r = await fetchDraftAmendment(draftIdRef.current);
+          const r = await fetchAttachmentPdf(amendmentInfo.url);
           if (r.success && r.pdfBase64) {
             const bin = atob(r.pdfBase64);
             const bytes = new Uint8Array(bin.length);
@@ -2306,7 +2309,8 @@ export default function DraftViewerPage() {
               mainPdfDoc.insertPage(amendmentInsertIdx + pi, amendPages[pi]);
             }
           } else {
-            console.warn("Amendment requested but backend returned no PDF:", r.error);
+            console.warn("Amendment requested but backend fetch failed:", r.error);
+            alert(`Failed to fetch Amendment from solicitation: ${r.error || "unknown error"}`);
           }
         } catch (amErr) {
           console.warn("Could not merge Amendment:", amErr);
@@ -3619,7 +3623,7 @@ export default function DraftViewerPage() {
       {pdfModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => !generatingPdf && !uploadingAmendment && setPdfModalOpen(false)}
+          onClick={() => !generatingPdf && setPdfModalOpen(false)}
         >
           <div
             className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl"
@@ -3630,8 +3634,8 @@ export default function DraftViewerPage() {
                 {pdfModalMode === "preview" ? "Preview PDF" : "Download PDF"} — Options
               </h3>
               <button
-                onClick={() => !generatingPdf && !uploadingAmendment && setPdfModalOpen(false)}
-                disabled={generatingPdf || uploadingAmendment}
+                onClick={() => !generatingPdf && setPdfModalOpen(false)}
+                disabled={generatingPdf}
                 className="text-zinc-400 hover:text-white text-xl leading-none disabled:opacity-40"
               >
                 ×
@@ -3655,84 +3659,37 @@ export default function DraftViewerPage() {
                 </div>
               </label>
 
-              {/* Amendment checkbox + upload */}
-              <div className="p-3 rounded-lg border border-zinc-700">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={pdfOpts.includeAmendment}
-                    onChange={(e) => setPdfOpts((o) => ({ ...o, includeAmendment: e.target.checked }))}
-                    disabled={!amendmentInfo}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-white">Attach signed Amendment</div>
-                    <div className="text-xs text-zinc-400 mt-0.5">
-                      Merged after SF1449 in the final PDF.
-                    </div>
-                  </div>
-                </label>
-
-                {/* Upload control */}
-                <div className="mt-3 pl-7">
+              {/* Amendment checkbox — auto-detected from solicitation attachments */}
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                  amendmentInfo
+                    ? "border-zinc-700 hover:border-zinc-500 cursor-pointer"
+                    : "border-zinc-800 opacity-60 cursor-not-allowed"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={pdfOpts.includeAmendment}
+                  onChange={(e) => setPdfOpts((o) => ({ ...o, includeAmendment: e.target.checked }))}
+                  disabled={!amendmentInfo}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-white">Attach signed Amendment</div>
                   {amendmentInfo ? (
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-emerald-400">
-                        ✓ {amendmentInfo.fileName}
-                        {amendmentInfo.sizeBytes > 0 && (
-                          <span className="text-zinc-500 ml-2">
-                            ({(amendmentInfo.sizeBytes / 1024).toFixed(0)} KB)
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        onClick={async () => {
-                          if (!draftId) return;
-                          if (!confirm("Remove the uploaded Amendment from this draft?")) return;
-                          await deleteDraftAmendment(draftId);
-                          setAmendmentInfo(null);
-                          setPdfOpts((o) => ({ ...o, includeAmendment: false }));
-                        }}
-                        className="text-red-400 hover:text-red-300 underline"
-                      >
-                        Remove
-                      </button>
+                    <div className="text-xs text-emerald-400 mt-0.5">
+                      ✓ Detected: {amendmentInfo.fileName}
                     </div>
                   ) : (
-                    <label className="block">
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="hidden"
-                        disabled={uploadingAmendment}
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f || !draftId) return;
-                          setUploadingAmendment(true);
-                          try {
-                            const r = await uploadDraftAmendment(draftId, f);
-                            if (r.success && r.fileName) {
-                              setAmendmentInfo({ fileName: r.fileName, sizeBytes: r.sizeBytes || f.size });
-                              setPdfOpts((o) => ({ ...o, includeAmendment: true }));
-                            } else {
-                              alert(`Amendment upload failed: ${r.error || "unknown error"}`);
-                            }
-                          } catch (err) {
-                            alert(`Amendment upload error: ${err instanceof Error ? err.message : String(err)}`);
-                          } finally {
-                            setUploadingAmendment(false);
-                            // reset input so re-selecting same file fires onChange
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                      <span className="inline-block px-3 py-1.5 text-xs rounded border border-zinc-600 hover:border-zinc-400 bg-zinc-800 hover:bg-zinc-700 cursor-pointer">
-                        {uploadingAmendment ? "Uploading..." : "Upload Amendment PDF"}
-                      </span>
-                    </label>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      No amendment found in this solicitation&apos;s attachments.
+                    </div>
                   )}
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    Merged after SF1449 in the final PDF.
+                  </div>
                 </div>
-              </div>
+              </label>
 
               {/* Info note */}
               <div className="text-[11px] text-zinc-500 px-1">
@@ -3743,7 +3700,7 @@ export default function DraftViewerPage() {
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setPdfModalOpen(false)}
-                disabled={generatingPdf || uploadingAmendment}
+                disabled={generatingPdf}
                 className="px-4 py-2 text-sm rounded-lg border border-zinc-600 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
               >
                 Cancel
@@ -3753,7 +3710,7 @@ export default function DraftViewerPage() {
                   setPdfModalOpen(false);
                   await handleDownloadPdf(pdfModalMode, pdfOpts);
                 }}
-                disabled={generatingPdf || uploadingAmendment}
+                disabled={generatingPdf}
                 className="px-4 py-2 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white font-semibold"
               >
                 {pdfModalMode === "preview" ? "Generate Preview" : "Generate & Download"}
