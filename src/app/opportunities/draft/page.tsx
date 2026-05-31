@@ -1065,6 +1065,11 @@ export default function DraftViewerPage() {
           clinData: clinParsed,
           clinText: clinContent,
           filename: sourceName || "Pricing_Schedule.xlsx",
+          // Let the backend backfill SOW context + canonical CLINs from the
+          // pipeline_artifacts row when frontend data is thin (avoids the LLM
+          // having to fill blind on a download click).
+          draftId: draftId || undefined,
+          recommendedBid: 0,
         }),
       });
       const result = await resp.json();
