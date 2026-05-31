@@ -1413,3 +1413,67 @@ export async function dismissFollowupDraft(id: string): Promise<boolean> {
   const data = await resp.json();
   return Boolean(data.success);
 }
+
+// ============================================================================
+// SF18 + AMENDMENT (cover-page attachments for the proposal PDF)
+// ============================================================================
+// All three hit the DIRECT backend (bypassing Vercel) because fills can be
+// slow and the Amendment PDF can be up to 25 MB.
+
+export interface AmendmentInfo {
+  fileName: string;
+  sizeBytes: number;
+  uploadedAt?: string;
+}
+
+/** Upload a signed Amendment PDF. Persists to the draft so it's one-time. */
+export async function uploadDraftAmendment(
+  draftId: string,
+  file: File,
+): Promise<{ success: boolean; fileName?: string; sizeBytes?: number; error?: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+  const resp = await fetch(
+    `${DIRECT_BACKEND_API_BASE}/draft/upload-amendment?draftId=${encodeURIComponent(draftId)}`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    },
+  );
+  return await resp.json();
+}
+
+/** Delete the uploaded Amendment for a draft. */
+export async function deleteDraftAmendment(draftId: string): Promise<{ success: boolean }> {
+  const resp = await fetch(
+    `${DIRECT_BACKEND_API_BASE}/draft/amendment?draftId=${encodeURIComponent(draftId)}`,
+    { method: "DELETE", headers: getAuthHeaders() },
+  );
+  return await resp.json();
+}
+
+/** Fetch the uploaded Amendment as base64 (for pdf-lib merging). */
+export async function fetchDraftAmendment(
+  draftId: string,
+): Promise<{ success: boolean; pdfBase64?: string; fileName?: string; error?: string }> {
+  const resp = await fetch(
+    `${DIRECT_BACKEND_API_BASE}/draft/amendment?draftId=${encodeURIComponent(draftId)}`,
+    { method: "GET", headers: getAuthHeaders() },
+  );
+  return await resp.json();
+}
+
+/** Fill the bundled blank SF18 template with draft data. */
+export async function fillSF18(
+  draftId: string,
+  company?: { name?: string; address?: string; phone?: string },
+): Promise<{ success: boolean; pdfBase64?: string; filled?: boolean; error?: string }> {
+  const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/fill-sf18`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ draftId, company }),
+  });
+  return await resp.json();
+}

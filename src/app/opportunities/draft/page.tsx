@@ -36,7 +36,8 @@ import {
   Wand2,
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
-import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus } from "@/lib/api";
+import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus,
+         uploadDraftAmendment, deleteDraftAmendment, fetchDraftAmendment, fillSF18 } from "@/lib/api";
 import { DIRECT_BACKEND_API_BASE } from "@/lib/apiBase";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
@@ -325,6 +326,14 @@ export default function DraftViewerPage() {
   const [editedContent, setEditedContent] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  // PDF download options modal — opened when user clicks Download PDF or
+  // Preview PDF. Lets them toggle SF18 (filled with draft data) and Amendment
+  // (uploaded once per draft) attachments.
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfModalMode, setPdfModalMode] = useState<"download" | "preview">("download");
+  const [pdfOpts, setPdfOpts] = useState({ includeSF18: false, includeAmendment: false });
+  const [amendmentInfo, setAmendmentInfo] = useState<{ fileName: string; sizeBytes: number } | null>(null);
+  const [uploadingAmendment, setUploadingAmendment] = useState(false);
 
   // Draft workspace state
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -549,6 +558,29 @@ export default function DraftViewerPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Hydrate amendmentInfo from backend whenever draftId changes. Cheap GET
+  // — backend returns 200 success:false if none uploaded, which we treat
+  // as "no amendment yet" without alerting.
+  useEffect(() => {
+    if (!draftId) {
+      setAmendmentInfo(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchDraftAmendment(draftId);
+        if (cancelled) return;
+        if (r.success && r.fileName) {
+          setAmendmentInfo({ fileName: r.fileName, sizeBytes: r.pdfBase64 ? Math.floor((r.pdfBase64.length * 3) / 4) : 0 });
+        } else {
+          setAmendmentInfo(null);
+        }
+      } catch { /* silent — no amendment is the common case */ }
+    })();
+    return () => { cancelled = true; };
+  }, [draftId]);
 
   const getContent = useCallback(
     (key: string) => editedContent[key] || "",
@@ -1119,7 +1151,10 @@ export default function DraftViewerPage() {
     });
   }, [getContent]);
 
-  const handleDownloadPdf = useCallback(async (mode: "download" | "preview" | "blob" = "download"): Promise<Blob | null> => {
+  const handleDownloadPdf = useCallback(async (
+    mode: "download" | "preview" | "blob" = "download",
+    opts: { includeSF18?: boolean; includeAmendment?: boolean } = {},
+  ): Promise<Blob | null> => {
     if (!data?.draft) return null;
     setGeneratingPdf(true);
 
@@ -2105,6 +2140,11 @@ export default function DraftViewerPage() {
       // ─── SF1449: Fetch, fill, and prepend as first page(s) ───
       const analysisData = data.attachmentAnalysis;
 
+      // Track where Amendment pages should be inserted. Default = right after
+      // cover (index 1). If SF1449 is inserted below, this bumps to "after the
+      // last SF1449 page" so the Amendment lands right after SF1449.
+      let amendmentInsertIdx = 1;
+
       if (analysisData?.sf1449Found && analysisData.sf1449SourceUrl) {
         try {
           const token = localStorage.getItem("arber_token");
@@ -2136,6 +2176,7 @@ export default function DraftViewerPage() {
               for (let pi = 0; pi < sf1449Pages.length; pi++) {
                 mainPdfDoc.insertPage(1 + pi, sf1449Pages[pi]);
               }
+              amendmentInsertIdx = 1 + sf1449Pages.length;
 
               // Overlay company info via pdf-lib using detected field positions
               {
@@ -2241,6 +2282,34 @@ export default function DraftViewerPage() {
           }
         } catch (sfErr) {
           console.warn("Could not merge SF1449:", sfErr);
+        }
+      }
+
+      // ─── AMENDMENT INSERT (after SF1449 if present) ──
+      // User toggled the "Attach signed Amendment" checkbox in the download
+      // modal and previously uploaded a PDF — pull it from the backend and
+      // splice it in at amendmentInsertIdx so it lands right after SF1449
+      // (or right after the cover page if SF1449 wasn't included).
+      if (opts.includeAmendment && draftIdRef.current) {
+        try {
+          const r = await fetchDraftAmendment(draftIdRef.current);
+          if (r.success && r.pdfBase64) {
+            const bin = atob(r.pdfBase64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const amendmentPdf = await PDFDocument.load(bytes.buffer);
+            const amendPages = await mainPdfDoc.copyPages(
+              amendmentPdf,
+              amendmentPdf.getPageIndices(),
+            );
+            for (let pi = 0; pi < amendPages.length; pi++) {
+              mainPdfDoc.insertPage(amendmentInsertIdx + pi, amendPages[pi]);
+            }
+          } else {
+            console.warn("Amendment requested but backend returned no PDF:", r.error);
+          }
+        } catch (amErr) {
+          console.warn("Could not merge Amendment:", amErr);
         }
       }
 
@@ -2389,6 +2458,43 @@ export default function DraftViewerPage() {
           }
         } catch (err) {
           console.warn("Could not merge DFARS PDF:", err);
+        }
+      }
+
+      // ─── SF18 PREPEND (at the very start of the PDF) ──
+      // User toggled the "Include SF18 (Request for Quotation)" checkbox in
+      // the download modal — call the backend, which fills the bundled blank
+      // template with draft data (request number, company, CLINs, signer,
+      // dates). Insert the returned pages at index 0 so SF18 is the very
+      // first thing the reviewer sees.
+      if (opts.includeSF18 && draftIdRef.current) {
+        try {
+          const sf18 = await fillSF18(draftIdRef.current, {
+            name: comp.name,
+            address: comp.address,
+            phone: comp.phone,
+          });
+          if (sf18.success && sf18.pdfBase64) {
+            const bin = atob(sf18.pdfBase64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const sf18Pdf = await PDFDocument.load(bytes.buffer);
+            const sf18Pages = await mainPdfDoc.copyPages(
+              sf18Pdf,
+              sf18Pdf.getPageIndices(),
+            );
+            // Prepend: insert at index 0, 1, 2... so SF18 ends up first.
+            for (let pi = 0; pi < sf18Pages.length; pi++) {
+              mainPdfDoc.insertPage(pi, sf18Pages[pi]);
+            }
+          } else {
+            console.warn("SF18 requested but fill failed:", sf18.error);
+            if (sf18.error?.toLowerCase().includes("not configured")) {
+              alert("SF18 template not yet configured on the server. Contact admin to upload SF18_blank.pdf.");
+            }
+          }
+        } catch (sf18Err) {
+          console.warn("Could not merge SF18:", sf18Err);
         }
       }
 
@@ -2620,7 +2726,7 @@ export default function DraftViewerPage() {
                 {copied ? "Copied!" : "Copy All"}
               </button>
               <button
-                onClick={() => handleDownloadPdf("preview")}
+                onClick={() => { setPdfModalMode("preview"); setPdfModalOpen(true); }}
                 disabled={generatingPdf}
                 className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-colors disabled:opacity-40"
               >
@@ -2629,7 +2735,7 @@ export default function DraftViewerPage() {
                 <span className="sm:hidden">{generatingPdf ? "PDF..." : "Preview"}</span>
               </button>
               <button
-                onClick={() => handleDownloadPdf("download")}
+                onClick={() => { setPdfModalMode("download"); setPdfModalOpen(true); }}
                 disabled={generatingPdf}
                 className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition-colors"
               >
@@ -3507,6 +3613,154 @@ export default function DraftViewerPage() {
           prefill={chatPrefill}
           onPrefillConsumed={() => setChatPrefill(null)}
         />
+      )}
+
+      {/* PDF Download Options Modal */}
+      {pdfModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => !generatingPdf && !uploadingAmendment && setPdfModalOpen(false)}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white">
+                {pdfModalMode === "preview" ? "Preview PDF" : "Download PDF"} — Options
+              </h3>
+              <button
+                onClick={() => !generatingPdf && !uploadingAmendment && setPdfModalOpen(false)}
+                disabled={generatingPdf || uploadingAmendment}
+                className="text-zinc-400 hover:text-white text-xl leading-none disabled:opacity-40"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* SF18 checkbox */}
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 hover:border-zinc-500 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={pdfOpts.includeSF18}
+                  onChange={(e) => setPdfOpts((o) => ({ ...o, includeSF18: e.target.checked }))}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-white">Include SF18 (Request for Quotation)</div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    Auto-filled with your company info, CLINs, and signer details. Prepended at the start of the PDF.
+                  </div>
+                </div>
+              </label>
+
+              {/* Amendment checkbox + upload */}
+              <div className="p-3 rounded-lg border border-zinc-700">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pdfOpts.includeAmendment}
+                    onChange={(e) => setPdfOpts((o) => ({ ...o, includeAmendment: e.target.checked }))}
+                    disabled={!amendmentInfo}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-white">Attach signed Amendment</div>
+                    <div className="text-xs text-zinc-400 mt-0.5">
+                      Merged after SF1449 in the final PDF.
+                    </div>
+                  </div>
+                </label>
+
+                {/* Upload control */}
+                <div className="mt-3 pl-7">
+                  {amendmentInfo ? (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-emerald-400">
+                        ✓ {amendmentInfo.fileName}
+                        {amendmentInfo.sizeBytes > 0 && (
+                          <span className="text-zinc-500 ml-2">
+                            ({(amendmentInfo.sizeBytes / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          if (!draftId) return;
+                          if (!confirm("Remove the uploaded Amendment from this draft?")) return;
+                          await deleteDraftAmendment(draftId);
+                          setAmendmentInfo(null);
+                          setPdfOpts((o) => ({ ...o, includeAmendment: false }));
+                        }}
+                        className="text-red-400 hover:text-red-300 underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        disabled={uploadingAmendment}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f || !draftId) return;
+                          setUploadingAmendment(true);
+                          try {
+                            const r = await uploadDraftAmendment(draftId, f);
+                            if (r.success && r.fileName) {
+                              setAmendmentInfo({ fileName: r.fileName, sizeBytes: r.sizeBytes || f.size });
+                              setPdfOpts((o) => ({ ...o, includeAmendment: true }));
+                            } else {
+                              alert(`Amendment upload failed: ${r.error || "unknown error"}`);
+                            }
+                          } catch (err) {
+                            alert(`Amendment upload error: ${err instanceof Error ? err.message : String(err)}`);
+                          } finally {
+                            setUploadingAmendment(false);
+                            // reset input so re-selecting same file fires onChange
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                      <span className="inline-block px-3 py-1.5 text-xs rounded border border-zinc-600 hover:border-zinc-400 bg-zinc-800 hover:bg-zinc-700 cursor-pointer">
+                        {uploadingAmendment ? "Uploading..." : "Upload Amendment PDF"}
+                      </span>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Info note */}
+              <div className="text-[11px] text-zinc-500 px-1">
+                SF1449 (if detected on the solicitation) is always included automatically.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setPdfModalOpen(false)}
+                disabled={generatingPdf || uploadingAmendment}
+                className="px-4 py-2 text-sm rounded-lg border border-zinc-600 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setPdfModalOpen(false);
+                  await handleDownloadPdf(pdfModalMode, pdfOpts);
+                }}
+                disabled={generatingPdf || uploadingAmendment}
+                className="px-4 py-2 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white font-semibold"
+              >
+                {pdfModalMode === "preview" ? "Generate Preview" : "Generate & Download"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
