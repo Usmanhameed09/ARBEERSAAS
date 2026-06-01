@@ -2440,12 +2440,17 @@ export default function DraftViewerPage() {
         }
       }
 
-      // ─── SF18 PREPEND (at the very start of the PDF) ──
-      // User toggled the "Include SF18 (Request for Quotation)" checkbox in
-      // the download modal — call the backend, which fills the bundled blank
-      // template with draft data (request number, company, CLINs, signer,
-      // dates). Insert the returned pages at index 0 so SF18 is the very
-      // first thing the reviewer sees.
+      // ─── SF18 INSERT (right after the cover page) ──
+      // User toggled the "Include SF18" checkbox in the download modal —
+      // call the backend, which fills the bundled blank template with the
+      // quoter side (Blocks 13/15/16: company, signer, date). Inserted at
+      // index 1 so SF18 lands right after the cover page, matching how
+      // SF1449 and the Amendment are positioned. Final order:
+      //   page 0: cover
+      //   page 1+: SF18 filled  ← here
+      //   then:    SF1449 → Amendment → proposal volumes → certs / DFARS
+      // (those have already been inserted by the time we get here, so we
+      //  just shift them down by sf18Pages.length).
       if (opts.includeSF18 && draftIdRef.current) {
         try {
           const sf18 = await fillSF18(draftIdRef.current, {
@@ -2462,9 +2467,9 @@ export default function DraftViewerPage() {
               sf18Pdf,
               sf18Pdf.getPageIndices(),
             );
-            // Prepend: insert at index 0, 1, 2... so SF18 ends up first.
+            // Insert at index 1, 2, ... so SF18 sits right after the cover.
             for (let pi = 0; pi < sf18Pages.length; pi++) {
-              mainPdfDoc.insertPage(pi, sf18Pages[pi]);
+              mainPdfDoc.insertPage(1 + pi, sf18Pages[pi]);
             }
           } else {
             console.warn("SF18 requested but fill failed:", sf18.error);
