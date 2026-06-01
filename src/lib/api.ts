@@ -1435,7 +1435,8 @@ export async function fetchAmendmentTemplate(): Promise<{
 export async function fillSF18(
   draftId: string,
   company?: { name?: string; address?: string; phone?: string },
-): Promise<{ success: boolean; pdfBase64?: string; filled?: boolean; error?: string }> {
+): Promise<{ success: boolean; pdfBase64?: string; filled?: boolean; signatureBase64?: string;
+             managerName?: string; jobTitle?: string; error?: string }> {
   const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/fill-sf18`, {
     method: "POST",
     headers: getAuthHeaders(),

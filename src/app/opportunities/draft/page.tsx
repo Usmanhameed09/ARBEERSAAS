@@ -2471,6 +2471,34 @@ export default function DraftViewerPage() {
             for (let pi = 0; pi < sf18Pages.length; pi++) {
               mainPdfDoc.insertPage(1 + pi, sf18Pages[pi]);
             }
+            // ─── Overlay signature on SF18 Block 14 ──
+            // Same signature image SF1449 uses. The backend's fill-sf18
+            // response includes signatureBase64 (from user.signature_path
+            // in Supabase storage). We draw it on the first SF18 page at
+            // Block 14's coordinates (SignatureField1[0] is at ~y=138, x=311
+            // on a US Letter 612×792 page).
+            if (sf18.signatureBase64) {
+              try {
+                const sigBin = atob(sf18.signatureBase64);
+                const sigBytes = new Uint8Array(sigBin.length);
+                for (let i = 0; i < sigBin.length; i++) sigBytes[i] = sigBin.charCodeAt(i);
+                // Detect PNG vs JPG from magic bytes
+                const isPng = sigBytes[0] === 0x89 && sigBytes[1] === 0x50;
+                const sigImg = isPng
+                  ? await mainPdfDoc.embedPng(sigBytes)
+                  : await mainPdfDoc.embedJpg(sigBytes);
+                const sf18Page = mainPdfDoc.getPage(1);
+                // Block 14 signature box on SF18-95a, scaled to fit
+                sf18Page.drawImage(sigImg, {
+                  x: 315,
+                  y: 130,
+                  width: 175,
+                  height: 30,
+                });
+              } catch (sigErr) {
+                console.warn("Could not overlay SF18 signature:", sigErr);
+              }
+            }
           } else {
             console.warn("SF18 requested but fill failed:", sf18.error);
             if (sf18.error?.toLowerCase().includes("not configured")) {
