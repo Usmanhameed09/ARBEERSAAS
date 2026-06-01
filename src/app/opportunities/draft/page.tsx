@@ -332,9 +332,6 @@ export default function DraftViewerPage() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfModalMode, setPdfModalMode] = useState<"download" | "preview">("download");
   const [pdfOpts, setPdfOpts] = useState({ includeSF18: false, includeAmendment: false });
-  // Auto-detected Amendment from the solicitation's attachments — no upload.
-  // `url` is the SAM/source URL the backend uses to download the PDF.
-  const [amendmentInfo, setAmendmentInfo] = useState<{ fileName: string; url: string } | null>(null);
 
   // Draft workspace state
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -559,30 +556,6 @@ export default function DraftViewerPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Auto-detect the Amendment by scanning the solicitation's attachments
-  // (the SAM.gov-provided files already in `opp.attachments`). Matches any
-  // PDF whose filename contains "amend" / "modification" / "sf30" / "sf 30".
-  // No upload required — the file is downloaded on demand from the SAM URL
-  // by the backend when the user ticks the checkbox and generates the PDF.
-  useEffect(() => {
-    const oppWide = data?.opportunity as unknown as {
-      attachments?: Array<{ name?: string; url?: string; type?: string }>;
-    } | undefined;
-    const attachments = oppWide?.attachments || [];
-    const isAmendmentLike = (name: string): boolean => {
-      const n = name.toLowerCase();
-      if (!n.endsWith(".pdf")) return false;
-      return (
-        n.includes("amend") ||
-        n.includes("modification") ||
-        n.includes(" mod ") || n.endsWith(" mod.pdf") ||
-        n.includes("sf30") || n.includes("sf 30") || n.includes("sf-30")
-      );
-    };
-    const match = attachments.find((a) => a?.name && a?.url && isAmendmentLike(a.name));
-    setAmendmentInfo(match ? { fileName: match.name!, url: match.url! } : null);
-  }, [data?.opportunity]);
 
   const getContent = useCallback(
     (key: string) => editedContent[key] || "",
@@ -2288,14 +2261,14 @@ export default function DraftViewerPage() {
       }
 
       // ─── AMENDMENT INSERT (after SF1449 if present) ──
-      // Auto-detected from the solicitation's attachments (see useEffect that
-      // scans for files containing "amend"/"modification"/"sf30"). When the
-      // user ticks the checkbox in the download modal, we fetch the detected
-      // PDF via the backend (bypasses CORS + uses SAM API key) and splice it
-      // in at amendmentInsertIdx so it lands right after SF1449.
-      if (opts.includeAmendment && amendmentInfo?.url) {
+      // Uses the bundled Amendment SF30 template — same model as SF18.
+      // Backend serves /api/draft/amendment-template as-is (no fill, no
+      // edits). Frontend merges it at amendmentInsertIdx so it lands right
+      // after SF1449 (or right after the cover page if SF1449 wasn't
+      // included).
+      if (opts.includeAmendment) {
         try {
-          const r = await fetchAttachmentPdf(amendmentInfo.url);
+          const r = await fetchAmendmentTemplate();
           if (r.success && r.pdfBase64) {
             const bin = atob(r.pdfBase64);
             const bytes = new Uint8Array(bin.length);
@@ -2309,8 +2282,10 @@ export default function DraftViewerPage() {
               mainPdfDoc.insertPage(amendmentInsertIdx + pi, amendPages[pi]);
             }
           } else {
-            console.warn("Amendment requested but backend fetch failed:", r.error);
-            alert(`Failed to fetch Amendment from solicitation: ${r.error || "unknown error"}`);
+            console.warn("Amendment template fetch failed:", r.error);
+            if (r.error?.toLowerCase().includes("not configured")) {
+              alert("Amendment template not yet configured on the server. Contact admin to upload Amendment_blank.pdf.");
+            }
           }
         } catch (amErr) {
           console.warn("Could not merge Amendment:", amErr);
@@ -3659,32 +3634,16 @@ export default function DraftViewerPage() {
                 </div>
               </label>
 
-              {/* Amendment checkbox — auto-detected from solicitation attachments */}
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                  amendmentInfo
-                    ? "border-zinc-700 hover:border-zinc-500 cursor-pointer"
-                    : "border-zinc-800 opacity-60 cursor-not-allowed"
-                }`}
-              >
+              {/* Amendment checkbox — bundled SF30 template, served as-is */}
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-zinc-700 hover:border-zinc-500 cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={pdfOpts.includeAmendment}
                   onChange={(e) => setPdfOpts((o) => ({ ...o, includeAmendment: e.target.checked }))}
-                  disabled={!amendmentInfo}
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-white">Attach signed Amendment</div>
-                  {amendmentInfo ? (
-                    <div className="text-xs text-emerald-400 mt-0.5">
-                      ✓ Detected: {amendmentInfo.fileName}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-500 mt-0.5">
-                      No amendment found in this solicitation&apos;s attachments.
-                    </div>
-                  )}
+                  <div className="text-sm font-semibold text-white">Attach Amendment</div>
                   <div className="text-xs text-zinc-400 mt-0.5">
                     Merged after SF1449 in the final PDF.
                   </div>
