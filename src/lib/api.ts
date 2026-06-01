@@ -1420,15 +1420,13 @@ export async function dismissFollowupDraft(id: string): Promise<boolean> {
 // Hits the DIRECT backend (bypassing Vercel) because the fills can be slow
 // and Amendment PDFs can be up to 25 MB.
 
-/** Download any attachment PDF (by source URL) and return as base64.
- * Used for auto-detected Amendments from the solicitation's attachments. */
-export async function fetchAttachmentPdf(
-  sourceUrl: string,
-): Promise<{ success: boolean; pdfBase64?: string; sizeBytes?: number; error?: string }> {
-  const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/fetch-attachment-pdf`, {
-    method: "POST",
+/** Fetch the bundled Amendment SF30 template (served as-is, no filling). */
+export async function fetchAmendmentTemplate(): Promise<{
+  success: boolean; pdfBase64?: string; fileName?: string; error?: string;
+}> {
+  const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/amendment-template`, {
+    method: "GET",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ sourceUrl }),
   });
   return await resp.json();
 }

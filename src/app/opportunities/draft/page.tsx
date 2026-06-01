@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import type { DraftResult, SectionProvenance, ProvenanceSource, ComplianceVerification, ProposedChange } from "@/lib/api";
 import { API_BASE, saveDraft, loadDraft, rewriteSection, formatReviewSection, extractPageLimits, updateDraftStatus,
-         fetchAttachmentPdf, fillSF18 } from "@/lib/api";
+         fetchAmendmentTemplate, fillSF18 } from "@/lib/api";
 import { DIRECT_BACKEND_API_BASE } from "@/lib/apiBase";
 import type { PageLimit, FormattingReq } from "@/lib/api";
 import SectionContent, { splitContent, loadMermaid } from "@/components/SectionContent";
