@@ -362,6 +362,7 @@ export default function DraftViewerPage() {
 
   // Excel pricing state
   const [excelDownloading, setExcelDownloading] = useState(false);
+  const [excelDownloadingMessage, setExcelDownloadingMessage] = useState("");
 
   // Draft Assistant chat panel
   const [chatOpen, setChatOpen] = useState(false);
@@ -1012,108 +1013,132 @@ export default function DraftViewerPage() {
     return Math.ceil(wordCount / 250); // ~250 words per page
   };
 
-  // Download filled Excel pricing sheet.
-  // PRIMARY path: the backend orchestrator already ran fill_existing_excel
-  // during draft generation and returned the filled bytes as
-  // data.pricingExcel.base64. Use those — they are deterministic and match
-  // the CLIN rows the backend itself generated.
-  // FALLBACK: if the backend did not include pricingExcel (older draft, fill
-  // failed, etc.), fall back to the live /draft/fill-pricing-excel endpoint
-  // which re-downloads the SAM template and re-fills it.
+  // Download filled Excel pricing sheet — polling-based, never times out.
+  //
+  // Flow:
+  //   1. If the draft already has an inline base64 (rare, only on fresh-gen response), use it.
+  //   2. Otherwise POST /api/draft/fill-pricing-excel — backend resolves the source xlsx
+  //      via 5 fallbacks (sourceUrl arg, attachmentAnalysis URL, opp.attachments,
+  //      draft_chat_uploads, etc.). We always send draftId; never bail just because
+  //      the local data doesn't show a URL.
+  //   3. Backend returns either {excelBase64} (cache hit) OR {status: "processing", jobId}.
+  //   4. If a jobId, poll /api/draft/pricing-fill-status every 3s for up to 15 min.
+  //      Show "Filling, please wait — Ns" while polling. No browser timeout possible
+  //      because each fetch is short (status query, not the heavy fill itself).
   const handleDownloadPricingExcel = useCallback(async () => {
     setExcelDownloading(true);
+    const token = typeof window !== "undefined" ? localStorage.getItem("arber_token") : null;
+    const authHeader: HeadersInit = token
+      ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+      : { "Content-Type": "application/json" };
+
+    const downloadBytes = (base64: string, filename: string) => {
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
     try {
+      // Path 1 — inline base64 from fresh-generate response
       const prefilled = data?.pricingExcel;
       if (prefilled?.base64) {
-        const bytes = Uint8Array.from(atob(prefilled.base64), c => c.charCodeAt(0));
-        const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = prefilled.filename || "Pricing_Schedule_Filled.xlsx";
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadBytes(prefilled.base64, prefilled.filename || "Pricing_Schedule_Filled.xlsx");
         return;
       }
 
-      // Resolve a source xlsx URL: prefer attachmentAnalysis (when present),
-      // else fall back to scanning opportunity.attachments for ANY xlsx.
-      // This catches drafts saved before pricingExcel/attachmentAnalysis
-      // metadata was persisted. Cast widens DraftResult.opportunity which
-      // doesn't declare `attachments` in its narrow type.
-      let sourceUrl = data?.attachmentAnalysis?.pricingFormatUrl as string | undefined;
-      let sourceName = data?.attachmentAnalysis?.pricingFormatSource as string | undefined;
-      if (!sourceUrl) {
-        const oppWide = data?.opportunity as unknown as { attachments?: Array<{ name?: string; url?: string; type?: string }> } | undefined;
-        const atts = oppWide?.attachments || [];
-        const xlsxAtt = atts.find((a) => {
-          const ext = (a?.name || "").toLowerCase().split(".").pop() || "";
-          const tp = (a?.type || "").toUpperCase();
-          return (ext === "xlsx" || ext === "xls" || tp === "XLSX" || tp === "XLS" || tp === "EXCEL") && Boolean(a?.url);
-        });
-        if (xlsxAtt?.url) {
-          sourceUrl = xlsxAtt.url;
-          sourceName = xlsxAtt.name;
-        }
-      }
-      if (!sourceUrl) {
-        alert("No source pricing spreadsheet found on this opportunity.");
-        return;
-      }
-
+      // Best-effort source-URL hints (backend can find without these too)
+      const sourceUrlHint = data?.attachmentAnalysis?.pricingFormatUrl as string | undefined;
+      const sourceNameHint = data?.attachmentAnalysis?.pricingFormatSource as string | undefined;
       const clinContent = getContent("clinData") || data?.draft?.clinData || "";
       let clinParsed: unknown = clinContent;
       try { clinParsed = JSON.parse(clinContent); } catch { /* send as text */ }
 
-      // CRITICAL: hit the backend DIRECTLY (bypassing Vercel rewrite). The
-      // fill can take 2-3 minutes on long single-tab templates, and Vercel
-      // serverless functions kill connections at 60s (Hobby) / 300s (Pro+).
-      // The direct path goes browser -> nginx -> backend, with no Vercel
-      // function in the middle, so we get the backend's full 1800s nginx
-      // proxy_read_timeout window.
+      // Path 2 — kick off the fill (or get cache hit)
       const resp = await fetch(`${DIRECT_BACKEND_API_BASE}/draft/fill-pricing-excel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("arber_token")}` },
+        headers: authHeader,
         body: JSON.stringify({
-          sourceUrl,
+          sourceUrl: sourceUrlHint || "",
           clinData: clinParsed,
           clinText: clinContent,
-          filename: sourceName || "Pricing_Schedule.xlsx",
-          // Let the backend backfill SOW context + canonical CLINs from the
-          // pipeline_artifacts row when frontend data is thin (avoids the LLM
-          // having to fill blind on a download click).
+          filename: sourceNameHint || "Pricing_Schedule.xlsx",
           draftId: draftId || undefined,
           recommendedBid: 0,
         }),
       });
+
       if (!resp.ok) {
-        alert(`Fill failed: server returned ${resp.status}. Check console for details.`);
+        alert(`Fill failed: server returned ${resp.status}.`);
         console.error("Excel fill HTTP error:", resp.status, await resp.text());
         return;
       }
-      const result = await resp.json();
-      if (result.success && result.excelBase64) {
-        const bytes = Uint8Array.from(atob(result.excelBase64), c => c.charCodeAt(0));
-        const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = result.filename || "Pricing_Schedule_Filled.xlsx";
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        // Backend explicitly returned {success: false} — surface the error
-        const errMsg = result.error || "Backend returned no file. The template may have failed to fill.";
-        alert(`Fill failed: ${errMsg}`);
-        console.error("Excel fill backend error:", result);
+      const initial = await resp.json();
+
+      // Cache hit — immediate download
+      if (initial.success && initial.excelBase64) {
+        downloadBytes(initial.excelBase64, initial.filename || "Pricing_Schedule_Filled.xlsx");
+        return;
       }
+
+      // Explicit failure
+      if (!initial.success) {
+        alert(initial.error || "Could not find a pricing spreadsheet for this draft.");
+        console.error("Fill kickoff error:", initial);
+        return;
+      }
+
+      // Path 3 — polling loop
+      const jobId = initial.jobId as string | undefined;
+      if (!jobId) {
+        alert("Backend returned no jobId. Please try again.");
+        return;
+      }
+
+      const MAX_POLL_MS = 15 * 60 * 1000; // 15 min ceiling
+      const POLL_INTERVAL_MS = 3000;
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < MAX_POLL_MS) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+        setExcelDownloadingMessage(`Filling pricing spreadsheet — ${elapsedSec}s elapsed`);
+
+        const statusResp = await fetch(
+          `${DIRECT_BACKEND_API_BASE}/draft/pricing-fill-status?jobId=${encodeURIComponent(jobId)}`,
+          { method: "GET", headers: authHeader },
+        );
+        if (!statusResp.ok) {
+          console.warn("Status poll HTTP error", statusResp.status);
+          continue; // transient — keep polling
+        }
+        const status = await statusResp.json();
+        if (status.status === "done" && status.excelBase64) {
+          downloadBytes(status.excelBase64, status.filename || "Pricing_Schedule_Filled.xlsx");
+          return;
+        }
+        if (status.status === "failed") {
+          alert(`Fill failed: ${status.error || "unknown"}`);
+          console.error("Fill job failed:", status);
+          return;
+        }
+        // status is "queued" / "running" / "processing" — keep polling
+      }
+      alert("Fill is taking longer than expected (>15 min). Check server logs.");
     } catch (err) {
       console.error("Excel download error:", err);
       alert(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setExcelDownloading(false);
+      setExcelDownloadingMessage("");
     }
-  }, [data, getContent]);
+  }, [data, getContent, draftId]);
 
   const handleCopyAll = useCallback(() => {
     const sections = SECTION_DEFS.filter((s) => getContent(s.key));
@@ -3253,7 +3278,9 @@ export default function DraftViewerPage() {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      {excelDownloading ? "Filling..." : "Download Filled Excel"}
+                      {excelDownloading
+                        ? (excelDownloadingMessage || "Filling...")
+                        : "Download Filled Excel"}
                     </button>
                   </div>
                 )}
