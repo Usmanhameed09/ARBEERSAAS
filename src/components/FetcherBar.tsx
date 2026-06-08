@@ -38,6 +38,12 @@ const DATE_RANGES = [
   { value: "1year", label: "Last Year" },
 ];
 
+function getMobileScanLabel(isScanning: boolean, isAnalyzing: boolean): string {
+  if (isScanning) return "Scanning...";
+  if (isAnalyzing) return "Analyzing...";
+  return "Scan";
+}
+
 // SAM.gov notice type codes
 const NOTICE_TYPES = [
   { code: "k", label: "Combined Synopsis/Solicitation" },
@@ -250,7 +256,7 @@ export default function FetcherBar({
                   : "Scan SAM.gov"}
             </span>
             <span className="sm:hidden">
-              {isScanning ? "Scanning..." : isAnalyzing ? "Analyzing..." : "Scan"}
+              {getMobileScanLabel(isScanning, isAnalyzing)}
             </span>
           </button>
         </div>

@@ -26,6 +26,13 @@ interface DashboardStats {
   submitted: number;
 }
 
+function getDraftStatusPillStyle(status: string | undefined): string {
+  if (status === "ready_for_review") return "bg-green-100 text-green-700";
+  if (status === "in_progress") return "bg-blue-100 text-blue-700";
+  if (status === "submitted") return "bg-purple-100 text-purple-700";
+  return "bg-gray-100 text-gray-600";
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     archivedOpportunities: 0,
@@ -119,15 +126,17 @@ export default function Dashboard() {
             View All
           </Link>
         </div>
-        {loading ? (
+        {loading && (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
           </div>
-        ) : recentSavedOpps.length === 0 ? (
+        )}
+        {!loading && recentSavedOpps.length === 0 && (
           <div className="py-10 text-center text-sm text-slate-400">
             No saved opportunities yet. Save opportunities from the search page.
           </div>
-        ) : (
+        )}
+        {!loading && recentSavedOpps.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] sm:text-[13px]" style={{ minWidth: "600px" }}>
               <thead>
@@ -199,15 +208,17 @@ export default function Dashboard() {
             View All
           </Link>
         </div>
-        {loading ? (
+        {loading && (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
           </div>
-        ) : recentDrafts.length === 0 ? (
+        )}
+        {!loading && recentDrafts.length === 0 && (
           <div className="py-10 text-center text-sm text-slate-400">
             No drafts yet. Generate a draft from an opportunity to get started.
           </div>
-        ) : (
+        )}
+        {!loading && recentDrafts.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] sm:text-[13px]" style={{ minWidth: "600px" }}>
               <thead>
@@ -246,12 +257,7 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        draft.status === "ready_for_review" ? "bg-green-100 text-green-700" :
-                        draft.status === "in_progress" ? "bg-blue-100 text-blue-700" :
-                        draft.status === "submitted" ? "bg-purple-100 text-purple-700" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${getDraftStatusPillStyle(draft.status)}`}>
                         {(draft.status || "draft").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                       </span>
                     </td>

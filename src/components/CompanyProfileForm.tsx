@@ -180,6 +180,18 @@ export default function CompanyProfileForm() {
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [sigUploading, setSigUploading] = useState(false);
 
+  // Helpers for past-performance row updates — extracted to keep onChange handlers
+  // shallow (SonarQube S2004: nested functions ≤ 4 levels).
+  const updatePastPerformanceRow = (
+    i: number,
+    patch: Partial<(typeof pastPerformance)[number]>,
+  ) => {
+    setPastPerformance((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  };
+  const removeCertById = (id: string) => {
+    setCertFiles((prev) => prev.filter((c) => c.id !== id));
+  };
+
   // Load profile from AuthContext when available
   useEffect(() => {
     if (user) {
@@ -1105,7 +1117,7 @@ export default function CompanyProfileForm() {
                         <FieldLabel label="Description of Work" />
                         <textarea
                           value={ref.description || ""}
-                          onChange={(e) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, description: e.target.value } : r))}
+                          onChange={(e) => updatePastPerformanceRow(i, { description: e.target.value })}
                           rows={3}
                           placeholder="Describe the scope, deliverables, and relevance to federal contracting..."
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-slate-400 focus:bg-white resize-none placeholder:text-slate-300"
@@ -1118,7 +1130,7 @@ export default function CompanyProfileForm() {
                             <FieldLabel label="POC Name" />
                             <TextInput
                               value={ref.pocName || ""}
-                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocName: v } : r))}
+                              onChange={(v) => updatePastPerformanceRow(i, { pocName: v })}
                               icon={UserRound}
                             />
                           </div>
@@ -1126,7 +1138,7 @@ export default function CompanyProfileForm() {
                             <FieldLabel label="POC Email" />
                             <TextInput
                               value={ref.pocEmail || ""}
-                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocEmail: v } : r))}
+                              onChange={(v) => updatePastPerformanceRow(i, { pocEmail: v })}
                               icon={Mail}
                             />
                           </div>
@@ -1134,7 +1146,7 @@ export default function CompanyProfileForm() {
                             <FieldLabel label="POC Phone" />
                             <TextInput
                               value={ref.pocPhone || ""}
-                              onChange={(v) => setPastPerformance((prev) => prev.map((r, idx) => idx === i ? { ...r, pocPhone: v } : r))}
+                              onChange={(v) => updatePastPerformanceRow(i, { pocPhone: v })}
                               icon={Phone}
                             />
                           </div>
@@ -1234,7 +1246,7 @@ export default function CompanyProfileForm() {
                         method: "DELETE",
                         headers: { Authorization: `Bearer ${token}` },
                       });
-                      setCertFiles((prev) => prev.filter((c) => c.id !== cert.id));
+                      removeCertById(cert.id);
                     }}
                     className="p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                   >

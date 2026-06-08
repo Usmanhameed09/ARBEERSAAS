@@ -202,11 +202,7 @@ export async function clearArchivedOpportunities(): Promise<{ success: boolean; 
 
 /** Delete a single saved opportunity by noticeId (reuses opp-store delete). */
 export async function deleteSavedOpportunity(noticeId: string): Promise<{ success: boolean }> {
-  const resp = await fetch(`${API_BASE}/opp-store/delete/${encodeURIComponent(noticeId)}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-  return resp.json();
+  return deleteArchivedOpportunity(noticeId);
 }
 
 /** Delete all saved opportunities for the current user. */
@@ -823,7 +819,7 @@ export async function downloadChatUpload(fileId: string, fileName?: string): Pro
   a.download = fileName || "download";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
 }
 

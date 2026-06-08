@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Calendar,
   Building2,
@@ -36,6 +35,12 @@ const BID_TYPE_COLORS: Record<string, { bg: string; text: string; border: string
   "Special Notice": { bg: "#64748b", text: "#ffffff", border: "#475569" },
 };
 
+function getComplianceScoreStyle(score: number): string {
+  if (score >= 70) return "bg-green-100 text-green-700";
+  if (score >= 50) return "bg-amber-100 text-amber-700";
+  return "bg-red-100 text-red-700";
+}
+
 export default function OpportunityCard({
   opportunity,
   onViewDetails,
@@ -45,7 +50,6 @@ export default function OpportunityCard({
   const saved = isSaved(opportunity.id);
   const { addToPipeline, isInPipeline } = usePipeline();
   const inPipeline = isInPipeline(opportunity.id);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const bidType = opportunity.bidType;
   const bidTypeStyle = bidType ? BID_TYPE_COLORS[bidType] || BID_TYPE_COLORS["RFP"] : null;
@@ -162,11 +166,7 @@ export default function OpportunityCard({
               AI Analysis
             </span>
             {opportunity.complianceScore != null && (
-              <span className={`ml-auto text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                opportunity.complianceScore >= 70 ? "bg-green-100 text-green-700" :
-                opportunity.complianceScore >= 50 ? "bg-amber-100 text-amber-700" :
-                "bg-red-100 text-red-700"
-              }`}>
+              <span className={`ml-auto text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full ${getComplianceScoreStyle(opportunity.complianceScore)}`}>
                 {opportunity.complianceScore}/100
               </span>
             )}

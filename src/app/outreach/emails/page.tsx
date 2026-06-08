@@ -23,6 +23,24 @@ interface SentEmailRow {
 
 type StatusFilter = "All" | "Sent" | "Opened" | "Bounced";
 
+function renderEmailStatus(bouncedAt?: string | null, openedAt?: string | null) {
+  if (bouncedAt) {
+    return (
+      <span className="text-rose-700 inline-flex items-center gap-1">
+        <XCircle className="w-3 h-3" /> Bounced
+      </span>
+    );
+  }
+  if (openedAt) {
+    return (
+      <span className="text-emerald-700 inline-flex items-center gap-1">
+        <CheckCircle2 className="w-3 h-3" /> Opened
+      </span>
+    );
+  }
+  return <span className="text-blue-700">Sent</span>;
+}
+
 export default function SentEmailsPage() {
   const [rows, setRows] = useState<SentEmailRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,9 +179,7 @@ export default function SentEmailsPage() {
                   <td className="px-4 py-2.5 text-xs text-gray-700 max-w-md truncate">{r.subject}</td>
                   <td className="px-4 py-2.5 text-xs text-gray-700">{new Date(r.sentAt).toLocaleString()}</td>
                   <td className="px-4 py-2.5 text-xs">
-                    {r.bouncedAt ? <span className="text-rose-700 inline-flex items-center gap-1"><XCircle className="w-3 h-3" /> Bounced</span> :
-                     r.openedAt ? <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Opened</span> :
-                     <span className="text-blue-700">Sent</span>}
+                    {renderEmailStatus(r.bouncedAt, r.openedAt)}
                   </td>
                 </tr>
               ))}

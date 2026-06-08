@@ -12,6 +12,33 @@ import {
 
 const PASSWORD_MASK = "••••••••";
 
+// Builds the editable form state from server settings. Extracted from the
+// component to keep its cognitive complexity below SonarQube's threshold.
+function buildFormFromSettings(s: OutreachSettings): OutreachSettingsInput {
+  return {
+    senderName: s.senderName || "",
+    senderEmail: s.senderEmail || "",
+    senderPhone: s.senderPhone || "",
+    senderTitle: s.senderTitle || "",
+    senderSignature: s.senderSignature || "",
+    sendgridVerifiedSender: s.sendgridVerifiedSender || "",
+    smtpHost: s.smtpHost || "",
+    smtpPort: s.smtpPort || 587,
+    smtpUsername: s.smtpUsername || "",
+    imapHost: s.imapHost || "",
+    imapPort: s.imapPort || 993,
+    imapUsername: s.imapUsername || "",
+    alwaysPreviewFirst: s.alwaysPreviewFirst || false,
+    dailySendCap: s.dailySendCap || 50,
+    step2DelayDays: s.step2DelayDays ?? 3,
+    step3DelayDays: s.step3DelayDays ?? 6,
+    defaultCcEmails: s.defaultCcEmails || [],
+    defaultBccEmails: s.defaultBccEmails || [],
+    notifyOnNewFollowup: s.notifyOnNewFollowup ?? true,
+    notifyEmail: s.notifyEmail || "",
+  };
+}
+
 export default function OutreachSettingsPage() {
   const [settings, setSettings] = useState<OutreachSettings>({});
   const [form, setForm] = useState<OutreachSettingsInput>({});
@@ -31,28 +58,7 @@ export default function OutreachSettingsPage() {
     try {
       const s = await getOutreachSettings();
       setSettings(s);
-      setForm({
-        senderName: s.senderName || "",
-        senderEmail: s.senderEmail || "",
-        senderPhone: s.senderPhone || "",
-        senderTitle: s.senderTitle || "",
-        senderSignature: s.senderSignature || "",
-        sendgridVerifiedSender: s.sendgridVerifiedSender || "",
-        smtpHost: s.smtpHost || "",
-        smtpPort: s.smtpPort || 587,
-        smtpUsername: s.smtpUsername || "",
-        imapHost: s.imapHost || "",
-        imapPort: s.imapPort || 993,
-        imapUsername: s.imapUsername || "",
-        alwaysPreviewFirst: s.alwaysPreviewFirst || false,
-        dailySendCap: s.dailySendCap || 50,
-        step2DelayDays: s.step2DelayDays ?? 3,
-        step3DelayDays: s.step3DelayDays ?? 6,
-        defaultCcEmails: s.defaultCcEmails || [],
-        defaultBccEmails: s.defaultBccEmails || [],
-        notifyOnNewFollowup: s.notifyOnNewFollowup ?? true,
-        notifyEmail: s.notifyEmail || "",
-      });
+      setForm(buildFormFromSettings(s));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -99,7 +105,6 @@ export default function OutreachSettingsPage() {
   };
 
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400";
-  const labelCls = "block text-[11px] font-semibold text-gray-500 uppercase mb-1";
 
   if (loading) {
     return (
@@ -214,7 +219,7 @@ export default function OutreachSettingsPage() {
         <Section title="SMTP (alternative or fallback)" icon={<Mail className="w-4 h-4" />} description="Use your own email account (Gmail/Outlook/O365) to send if not using SendGrid. For Gmail: enable 2FA + create App Password.">
           <div className="grid grid-cols-2 gap-3">
             <Field label="SMTP host"><input className={inputCls} value={form.smtpHost || ""} onChange={(e) => update("smtpHost", e.target.value)} placeholder="smtp.gmail.com" /></Field>
-            <Field label="SMTP port"><input type="number" className={inputCls} value={form.smtpPort ?? 587} onChange={(e) => update("smtpPort", parseInt(e.target.value) || 587)} /></Field>
+            <Field label="SMTP port"><input type="number" className={inputCls} value={form.smtpPort ?? 587} onChange={(e) => update("smtpPort", Number.parseInt(e.target.value, 10) || 587)} /></Field>
             <Field label="SMTP username"><input className={inputCls} value={form.smtpUsername || ""} onChange={(e) => update("smtpUsername", e.target.value)} placeholder="your-email@gmail.com" /></Field>
             <Field label="SMTP password / app password">
               <div className="relative">
@@ -238,7 +243,7 @@ export default function OutreachSettingsPage() {
         <Section title="IMAP (read replies)" icon={<Mail className="w-4 h-4" />} description="The poller checks this inbox every 5 minutes for replies to outreach emails. Usually same account as SMTP.">
           <div className="grid grid-cols-2 gap-3">
             <Field label="IMAP host"><input className={inputCls} value={form.imapHost || ""} onChange={(e) => update("imapHost", e.target.value)} placeholder="imap.gmail.com" /></Field>
-            <Field label="IMAP port"><input type="number" className={inputCls} value={form.imapPort ?? 993} onChange={(e) => update("imapPort", parseInt(e.target.value) || 993)} /></Field>
+            <Field label="IMAP port"><input type="number" className={inputCls} value={form.imapPort ?? 993} onChange={(e) => update("imapPort", Number.parseInt(e.target.value, 10) || 993)} /></Field>
             <Field label="IMAP username"><input className={inputCls} value={form.imapUsername || ""} onChange={(e) => update("imapUsername", e.target.value)} placeholder="your-email@gmail.com" /></Field>
             <Field label="IMAP password / app password">
               <div className="relative">
@@ -280,13 +285,13 @@ export default function OutreachSettingsPage() {
         {/* CAMPAIGN BEHAVIOR */}
         <Section title="Campaign Behavior" icon={<SettingsIcon className="w-4 h-4" />} description="Step delays and approval thresholds.">
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Step 2 delay (days)"><input type="number" className={inputCls} value={form.step2DelayDays ?? 3} onChange={(e) => update("step2DelayDays", parseInt(e.target.value) || 3)} /></Field>
-            <Field label="Step 3 delay (days)"><input type="number" className={inputCls} value={form.step3DelayDays ?? 6} onChange={(e) => update("step3DelayDays", parseInt(e.target.value) || 6)} /></Field>
-            <Field label="Daily send cap"><input type="number" className={inputCls} value={form.dailySendCap ?? 50} onChange={(e) => update("dailySendCap", parseInt(e.target.value) || 50)} /></Field>
+            <Field label="Step 2 delay (days)"><input type="number" className={inputCls} value={form.step2DelayDays ?? 3} onChange={(e) => update("step2DelayDays", Number.parseInt(e.target.value, 10) || 3)} /></Field>
+            <Field label="Step 3 delay (days)"><input type="number" className={inputCls} value={form.step3DelayDays ?? 6} onChange={(e) => update("step3DelayDays", Number.parseInt(e.target.value, 10) || 6)} /></Field>
+            <Field label="Daily send cap"><input type="number" className={inputCls} value={form.dailySendCap ?? 50} onChange={(e) => update("dailySendCap", Number.parseInt(e.target.value, 10) || 50)} /></Field>
             <Field label="Always require approval before sending" full>
               <label className="flex items-center gap-2 text-xs text-gray-700">
                 <input type="checkbox" checked={!!form.alwaysPreviewFirst} onChange={(e) => update("alwaysPreviewFirst", e.target.checked)} />
-                If on, every campaign requires you to preview Step 1 before launching, regardless of AI heuristic.
+                <span>If on, every campaign requires you to preview Step 1 before launching, regardless of AI heuristic.</span>
               </label>
             </Field>
           </div>

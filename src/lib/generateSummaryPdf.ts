@@ -138,74 +138,80 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   };
 
   // Helper: write rich text with bullet support and paragraph spacing
+  const drawBulletGlyph = (cy: number): void => {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.text("•", margin + 3, cy);
+  };
+
+  const renderCapsParagraph = (
+    capsMatch: RegExpMatchArray,
+    isBullet: boolean,
+    xOffset: number,
+    wrapWidth: number,
+    cy: number,
+  ): number => {
+    checkPageBreak(5);
+    if (isBullet) drawBulletGlyph(cy);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 30, 30);
+    doc.text(capsMatch[1], xOffset, cy);
+    const labelWidth = doc.getTextWidth(capsMatch[1]) + 1;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+    const restLines = doc.splitTextToSize(capsMatch[2], wrapWidth - labelWidth);
+    if (restLines.length === 0) return cy + 4.2;
+    doc.text(restLines[0], xOffset + labelWidth, cy);
+    let ny = cy + 4.2;
+    for (let i = 1; i < restLines.length; i++) {
+      checkPageBreak(5);
+      doc.text(restLines[i], xOffset, ny);
+      ny += 4.2;
+    }
+    return ny;
+  };
+
+  const renderRegularParagraph = (
+    text: string,
+    isBullet: boolean,
+    xOffset: number,
+    wrapWidth: number,
+    cy: number,
+  ): number => {
+    checkPageBreak(5);
+    if (isBullet) drawBulletGlyph(cy);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+    const lines = doc.splitTextToSize(text, wrapWidth);
+    let ny = cy;
+    for (const line of lines) {
+      checkPageBreak(5);
+      doc.text(line, xOffset, ny);
+      ny += 4.2;
+    }
+    return ny;
+  };
+
   const writeRichText = (text: string, startY: number): number => {
     let cy = startY;
     const paragraphs = text.split("\n");
-
     for (const para of paragraphs) {
       const trimmed = para.trim();
       if (!trimmed) {
-        cy += 2; // Paragraph spacing
+        cy += 2;
         continue;
       }
-
-      // Detect bullet points
-      const isBullet = /^[•\-\*]\s/.test(trimmed);
-      const bulletText = isBullet ? trimmed.replace(/^[•\-\*]\s*/, "") : trimmed;
+      const isBullet = /^[•\-*]\s/.test(trimmed);
+      const bulletText = isBullet ? trimmed.replace(/^[•\-*]\s*/, "") : trimmed;
       const xOffset = isBullet ? margin + 8 : margin + 3;
       const wrapWidth = isBullet ? contentWidth - 11 : contentWidth - 5;
-
-      // Detect CAPS labels like "MANDATORY REQUIREMENT:" or "KEY PERSONNEL:"
       const capsMatch = bulletText.match(/^([A-Z][A-Z\s&/]+:)\s*(.*)/);
-
-      if (capsMatch) {
-        // Bold the label part
-        checkPageBreak(5);
-        if (isBullet) {
-          doc.setFontSize(9);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(50, 50, 50);
-          doc.text("•", margin + 3, cy);
-        }
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        doc.text(capsMatch[1], xOffset, cy);
-        const labelWidth = doc.getTextWidth(capsMatch[1]) + 1;
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(50, 50, 50);
-        const restLines = doc.splitTextToSize(capsMatch[2], wrapWidth - labelWidth);
-        if (restLines.length > 0) {
-          doc.text(restLines[0], xOffset + labelWidth, cy);
-          cy += 4.2;
-          for (let i = 1; i < restLines.length; i++) {
-            checkPageBreak(5);
-            doc.text(restLines[i], xOffset, cy);
-            cy += 4.2;
-          }
-        } else {
-          cy += 4.2;
-        }
-      } else {
-        // Regular text or bullet
-        checkPageBreak(5);
-        if (isBullet) {
-          doc.setFontSize(9);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(50, 50, 50);
-          doc.text("•", margin + 3, cy);
-        }
-
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(50, 50, 50);
-        const lines = doc.splitTextToSize(bulletText, wrapWidth);
-        for (const line of lines) {
-          checkPageBreak(5);
-          doc.text(line, xOffset, cy);
-          cy += 4.2;
-        }
-      }
+      cy = capsMatch
+        ? renderCapsParagraph(capsMatch, isBullet, xOffset, wrapWidth, cy)
+        : renderRegularParagraph(bulletText, isBullet, xOffset, wrapWidth, cy);
     }
     return cy;
   };
@@ -341,7 +347,7 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
   }
 
   // --- AI Pricing Prediction Box ---
-  if (opportunity.pricingPrediction && opportunity.pricingPrediction.predictedBid != null) {
+  if (opportunity.pricingPrediction?.predictedBid != null) {
     checkPageBreak(35);
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, pageWidth - margin, y);
@@ -370,7 +376,7 @@ export async function generateSummaryPdf(opportunity: Opportunity): Promise<bool
     for (let idx = 0; idx < prices.length; idx++) {
       const x = margin + idx * (boxWidth + 5);
       const isRecommended = idx === 1;
-      doc.setFillColor(isRecommended ? 220 : 245, isRecommended ? 245 : 245, isRecommended ? 230 : 245);
+      doc.setFillColor(isRecommended ? 220 : 245, 245, isRecommended ? 230 : 245);
       if (isRecommended) {
         doc.setDrawColor(16, 120, 80);
         doc.setLineWidth(0.5);

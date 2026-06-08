@@ -47,12 +47,24 @@ const BID_TYPE_COLORS: Record<string, { bg: string; text: string; border: string
   "Special Notice": { bg: "#64748b", text: "#ffffff", border: "#475569" },
 };
 
+function getConfidencePillStyle(confidence: string | undefined): string {
+  if (confidence === "high") return "bg-emerald-200 text-emerald-800";
+  if (confidence === "medium") return "bg-amber-200 text-amber-800";
+  return "bg-gray-200 text-gray-600";
+}
+
+function getExternalLinkDescription(type: string | undefined): string {
+  if (type === "PIEE_SOLICITATION") return "PIEE Portal — Click to view & download solicitation documents";
+  if (type === "PDF" || type === "DOCX" || type === "XLSX") return `Direct ${type} download`;
+  if (type === "PIEE") return "PIEE Resource";
+  return "External Resource";
+}
+
 export default function OpportunityDetailModal({
   opportunity,
   onClose,
 }: OpportunityDetailModalProps) {
   const isGo = opportunity.status === "Go";
-  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [selectedPricing, setSelectedPricing] = useState<"low" | "recommended" | "high">("recommended");
   const [showSectionPicker, setShowSectionPicker] = useState(false);
@@ -250,8 +262,8 @@ export default function OpportunityDetailModal({
                 <h3 className="text-xs sm:text-sm font-bold text-gray-900">Compliance Flags ({opportunity.bidKillers.length})</h3>
               </div>
               <div className="space-y-1.5">
-                {opportunity.bidKillers.map((bk, i) => (
-                  <div key={i} className={`flex items-center gap-2 p-1.5 sm:p-2 rounded-lg text-[10px] sm:text-xs ${
+                {opportunity.bidKillers.map((bk) => (
+                  <div key={`${bk.ruleCode}-${bk.ruleName}`} className={`flex items-center gap-2 p-1.5 sm:p-2 rounded-lg text-[10px] sm:text-xs ${
                     bk.severity === "hard_stop"
                       ? "bg-red-100 text-red-800"
                       : "bg-amber-100 text-amber-800"
@@ -314,7 +326,7 @@ export default function OpportunityDetailModal({
           )}
 
           {/* AI Predicted Bid Price */}
-          {opportunity.pricingPrediction?.predictedBid ? (
+          {opportunity.pricingPrediction?.predictedBid && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 sm:p-4 mb-4 sm:mb-5">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-2">
@@ -326,13 +338,7 @@ export default function OpportunityDetailModal({
                     <p className="text-[9px] sm:text-[10px] text-gray-500">Based on incumbent contract analysis</p>
                   </div>
                 </div>
-                <span className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${
-                  opportunity.pricingPrediction.confidence === "high"
-                    ? "bg-emerald-200 text-emerald-800"
-                    : opportunity.pricingPrediction.confidence === "medium"
-                    ? "bg-amber-200 text-amber-800"
-                    : "bg-gray-200 text-gray-600"
-                }`}>
+                <span className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${getConfidencePillStyle(opportunity.pricingPrediction.confidence)}`}>
                   {opportunity.pricingPrediction.confidence}
                 </span>
               </div>
@@ -370,7 +376,8 @@ export default function OpportunityDetailModal({
                 </div>
               )}
             </div>
-          ) : opportunity.marketBenchmark && opportunity.marketBenchmark.sampleSize >= 3 ? (
+          )}
+          {!opportunity.pricingPrediction?.predictedBid && opportunity.marketBenchmark && opportunity.marketBenchmark.sampleSize >= 3 && (
             <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 sm:p-4 mb-4 sm:mb-5">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-2">
@@ -443,7 +450,8 @@ export default function OpportunityDetailModal({
                 <strong>Note:</strong> This is a market-wide reference, not a bid prediction. Use the median as a starting point and adjust for scope, location, and your cost structure.
               </p>
             </div>
-          ) : (
+          )}
+          {!opportunity.pricingPrediction?.predictedBid && !(opportunity.marketBenchmark && opportunity.marketBenchmark.sampleSize >= 3) && (
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 mb-4 sm:mb-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-slate-200 flex items-center justify-center">
@@ -476,8 +484,8 @@ export default function OpportunityDetailModal({
             <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-2 sm:mb-3">Points of Contact</h3>
             {(opportunity.allPocs && opportunity.allPocs.length > 0 ? opportunity.allPocs : [
               { type: "primary", fullName: opportunity.pointOfContact.name, title: "", email: opportunity.pointOfContact.email, phone: opportunity.pointOfContact.phone, fax: "" },
-            ]).map((poc, idx) => (
-              <div key={idx} className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2 mb-2">
+            ]).map((poc) => (
+              <div key={`${poc.type}-${poc.email || poc.fullName || poc.phone}`} className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2 mb-2">
                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${poc.type === "primary" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
                   {poc.type || "Primary"}
                 </span>
@@ -508,9 +516,9 @@ export default function OpportunityDetailModal({
                 Solicitation Links ({opportunity.externalLinks.length})
               </h3>
               <div className="space-y-1.5 sm:space-y-2">
-                {opportunity.externalLinks.map((link, i) => (
+                {opportunity.externalLinks.map((link) => (
                   <a
-                    key={i}
+                    key={link.url}
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -523,13 +531,7 @@ export default function OpportunityDetailModal({
                       <div className="min-w-0">
                         <p className="text-[10px] sm:text-xs font-semibold text-gray-800 truncate">{link.title}</p>
                         <p className="text-[9px] sm:text-[10px] text-indigo-500">
-                          {link.type === "PIEE_SOLICITATION"
-                            ? "PIEE Portal — Click to view & download solicitation documents"
-                            : link.type === "PDF" || link.type === "DOCX" || link.type === "XLSX"
-                            ? `Direct ${link.type} download`
-                            : link.type === "PIEE"
-                            ? "PIEE Resource"
-                            : "External Resource"}
+                          {getExternalLinkDescription(link.type)}
                         </p>
                       </div>
                     </div>
@@ -600,13 +602,9 @@ export default function OpportunityDetailModal({
             }}
             className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-[#1e2a3a] hover:bg-[#2a3d55] text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors"
           >
-            {generatingPdf ? (
-              <Loader2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-            )}
-            <span className="hidden sm:inline">{generatingPdf ? "Generating PDF..." : (summaryCached ? "View AI Summary Report" : "Generate AI Summary Report")}</span>
-            <span className="sm:hidden">{generatingPdf ? "Generating..." : (summaryCached ? "View Summary" : "AI Summary")}</span>
+            <Sparkles className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+            <span className="hidden sm:inline">{summaryCached ? "View AI Summary Report" : "Generate AI Summary Report"}</span>
+            <span className="sm:hidden">{summaryCached ? "View Summary" : "AI Summary"}</span>
           </button>
           {isGo && (
             <button

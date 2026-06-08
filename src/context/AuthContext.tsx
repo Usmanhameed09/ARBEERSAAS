@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return;
     const expiresAtStr = localStorage.getItem("arber_token_expires_at");
     if (!expiresAtStr) return;
-    const expiresAt = parseInt(expiresAtStr, 10) || 0;
+    const expiresAt = Number.parseInt(expiresAtStr, 10) || 0;
     // Fire 2 min before expiry, with a 10s floor and 30 min ceiling
     const msUntilRefresh = Math.max(10_000, Math.min(expiresAt - Date.now() - 120_000, 30 * 60 * 1000));
     const handle = window.setTimeout(() => { void refreshAccessToken(); }, msUntilRefresh);

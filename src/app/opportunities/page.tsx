@@ -232,7 +232,7 @@ function OpportunitiesContent() {
   // ── Build dynamic NAICS tabs ──
   const naicsWithResults = Array.from(
     new Set(allOpportunities.map((o) => o.naicsCode).filter(Boolean))
-  ).sort();
+  ).sort((a, b) => a.localeCompare(b));
 
   const naicsLabelMap = new Map(NAICS_CODES.map((n) => [n.code, n.label]));
   const getNaicsShort = (code: string) => {
@@ -516,10 +516,8 @@ function OpportunitiesContent() {
       )}
 
       {/* Cards */}
-      {isArchivedTab ? (
-        /* ── Archived Tab Content ── */
-        filteredArchived.length > 0 ? (
-          <>
+      {isArchivedTab && filteredArchived.length > 0 && (
+        <>
             {/* Clear All button */}
             <div className="flex justify-end mb-3">
               <button
@@ -578,25 +576,27 @@ function OpportunitiesContent() {
                 </div>
               </div>
             )}
-          </>
-        ) : archivedOpportunities.length > 0 && searchQuery ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
-            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities match &quot;{searchQuery}&quot;</p>
-            <p className="text-xs text-gray-400">
-              Try the solicitation number, title, or agency.
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
-            <Archive className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities</p>
-            <p className="text-xs text-gray-400">
-              Previously scanned opportunities that you didn&apos;t save will appear here.
-            </p>
-          </div>
-        )
-      ) : hasResults ? (
+        </>
+      )}
+      {isArchivedTab && filteredArchived.length === 0 && archivedOpportunities.length > 0 && searchQuery && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
+          <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities match &quot;{searchQuery}&quot;</p>
+          <p className="text-xs text-gray-400">
+            Try the solicitation number, title, or agency.
+          </p>
+        </div>
+      )}
+      {isArchivedTab && filteredArchived.length === 0 && !(archivedOpportunities.length > 0 && searchQuery) && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
+          <Archive className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm font-medium text-gray-500 mb-1">No archived opportunities</p>
+          <p className="text-xs text-gray-400">
+            Previously scanned opportunities that you didn&apos;t save will appear here.
+          </p>
+        </div>
+      )}
+      {!isArchivedTab && hasResults && (
         <>
           {/* Go section */}
           {goOpps.length > 0 && (
@@ -638,19 +638,22 @@ function OpportunitiesContent() {
             </div>
           )}
         </>
-      ) : (
+      )}
+      {!isArchivedTab && !hasResults && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
-          {isScanning ? (
+          {isScanning && (
             <>
               <Radar className="w-10 h-10 text-blue-400 mx-auto mb-3 animate-pulse" />
               <p className="text-sm font-medium text-gray-600">Scanning SAM.gov...</p>
             </>
-          ) : isAnalyzing ? (
+          )}
+          {!isScanning && isAnalyzing && (
             <>
               <Radar className="w-10 h-10 text-blue-400 mx-auto mb-3 animate-spin" />
               <p className="text-sm font-medium text-gray-600">Analyzing opportunities with AI...</p>
             </>
-          ) : (
+          )}
+          {!isScanning && !isAnalyzing && (
             <>
               <Radar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-500 mb-1">No scan results</p>

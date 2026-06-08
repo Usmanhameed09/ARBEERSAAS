@@ -34,6 +34,13 @@ function formatStatus(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function getBidTypePillStyle(bidType: string): string {
+  const upper = bidType.toUpperCase();
+  if (upper === "RFP") return "bg-red-100 text-red-700";
+  if (upper === "RFQ") return "bg-amber-100 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
+
 export default function ProposalWorkspacePage() {
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,17 +192,11 @@ export default function ProposalWorkspacePage() {
                         {formatStatus(draft.status)}
                       </span>
                       {draft.bidType && (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          draft.bidType.toUpperCase() === "RFP"
-                            ? "bg-red-100 text-red-700"
-                            : draft.bidType.toUpperCase() === "RFQ"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${getBidTypePillStyle(draft.bidType)}`}>
                           {draft.bidType.toUpperCase()}
                         </span>
                       )}
-                      {draft.version && draft.version > 0 && (
+                      {Boolean(draft.version && draft.version > 0) && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-600">
                           v{draft.version}
                         </span>

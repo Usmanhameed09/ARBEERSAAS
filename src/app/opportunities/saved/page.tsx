@@ -14,6 +14,11 @@ import {
 } from "@/lib/api";
 import { useSavedOpportunities } from "@/context/SavedOpportunitiesContext";
 
+function buildOppCountLabel(shown: number, total: number): string {
+  const noun = total === 1 ? "opportunity" : "opportunities";
+  return `${shown} of ${total} ${noun} shown`;
+}
+
 function SavedOpportunitiesContent() {
   const searchParams = useSearchParams();
   const { savedIds, removeLocal, clearAllLocal } = useSavedOpportunities();
@@ -83,7 +88,7 @@ function SavedOpportunitiesContent() {
               Saved Opportunities
             </h1>
             <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">
-              {loading ? "Loading..." : `${filteredOpps.length} of ${visibleOpps.length} opportunity${visibleOpps.length !== 1 ? "ies" : "y"} shown`}
+              {loading ? "Loading..." : buildOppCountLabel(filteredOpps.length, visibleOpps.length)}
             </p>
           </div>
         </div>
@@ -113,14 +118,15 @@ function SavedOpportunitiesContent() {
         </div>
       </div>
 
-      {loading ? (
+      {loading && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
           <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400 mx-auto mb-3 animate-spin" />
           <p className="text-xs sm:text-sm font-medium text-gray-500">
             Loading saved opportunities...
           </p>
         </div>
-      ) : filteredOpps.length > 0 ? (
+      )}
+      {!loading && filteredOpps.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
           {filteredOpps.map((opp) => (
             <div key={opp.id} className="relative group">
@@ -138,7 +144,8 @@ function SavedOpportunitiesContent() {
             </div>
           ))}
         </div>
-      ) : visibleOpps.length > 0 && searchQuery ? (
+      )}
+      {!loading && filteredOpps.length === 0 && visibleOpps.length > 0 && searchQuery && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
           <Search className="w-8 h-8 sm:w-10 sm:h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1">
@@ -148,7 +155,8 @@ function SavedOpportunitiesContent() {
             Try the solicitation number, agency, or title.
           </p>
         </div>
-      ) : (
+      )}
+      {!loading && filteredOpps.length === 0 && !(visibleOpps.length > 0 && searchQuery) && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 sm:p-16 text-center">
           <Bookmark className="w-8 h-8 sm:w-10 sm:h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1">

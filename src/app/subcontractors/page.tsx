@@ -29,6 +29,31 @@ function fmtCurrency(n?: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+function renderSubContactCell(sub: SubcontractorRecord) {
+  if (sub.contactEmail) {
+    return (
+      <div className="flex items-center gap-1 text-emerald-700">
+        <Mail className="w-3 h-3" /> {sub.contactEmail}
+      </div>
+    );
+  }
+  if (sub.contactPhone) {
+    return (
+      <div className="flex items-center gap-1 text-gray-700">
+        <Phone className="w-3 h-3" /> {sub.contactPhone}
+      </div>
+    );
+  }
+  if (sub.website) {
+    return (
+      <a href={sub.website} target="_blank" rel="noopener" className="flex items-center gap-1 text-blue-600 hover:underline">
+        <Globe className="w-3 h-3" /> website
+      </a>
+    );
+  }
+  return <span className="text-amber-600 text-[11px]">⚠ none</span>;
+}
+
 export default function SubcontractorsPage() {
   const { companyProfile } = useAuth();
   const [subs, setSubs] = useState<SubcontractorRecord[]>([]);
@@ -75,7 +100,7 @@ export default function SubcontractorsPage() {
   })();
 
   const states = useMemo(
-    () => ["All", ...Array.from(new Set(subs.map((s) => s.state).filter(Boolean) as string[])).sort()],
+    () => ["All", ...Array.from(new Set(subs.map((s) => s.state).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b))],
     [subs]
   );
 
@@ -292,15 +317,7 @@ export default function SubcontractorsPage() {
                     {(sub.naicsCodes || []).slice(0, 2).join(", ") || "—"}
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {sub.contactEmail ? (
-                      <div className="flex items-center gap-1 text-emerald-700"><Mail className="w-3 h-3" /> {sub.contactEmail}</div>
-                    ) : sub.contactPhone ? (
-                      <div className="flex items-center gap-1 text-gray-700"><Phone className="w-3 h-3" /> {sub.contactPhone}</div>
-                    ) : sub.website ? (
-                      <a href={sub.website} target="_blank" rel="noopener" className="flex items-center gap-1 text-blue-600 hover:underline"><Globe className="w-3 h-3" /> website</a>
-                    ) : (
-                      <span className="text-amber-600 text-[11px]">⚠ none</span>
-                    )}
+                    {renderSubContactCell(sub)}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     <div className="font-bold text-gray-700">{sub.responseScore || 50}</div>
@@ -407,35 +424,35 @@ function EditModal({ sub, onClose, onSaved }: { sub: SubcontractorRecord; onClos
           <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 grid grid-cols-2 gap-2 text-xs">
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Contact Name</label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Contact Name</span>
             <input value={form.contactName} onChange={(e) => setForm({...form, contactName: e.target.value})} className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Email *</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Email *</span>
             <input value={form.contactEmail} onChange={(e) => setForm({...form, contactEmail: e.target.value})} placeholder="info@company.com" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Phone</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Phone</span>
             <input value={form.contactPhone} onChange={(e) => setForm({...form, contactPhone: e.target.value})} className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Website</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Website</span>
             <input value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} placeholder="https://..." className={inputCls} />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Insurance Status</label>
+          </label>
+          <label className="col-span-2 block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Insurance Status</span>
             <select value={form.insuranceStatus} onChange={(e) => setForm({...form, insuranceStatus: e.target.value as typeof form.insuranceStatus})} className={inputCls}>
               <option value="unknown">Unknown</option>
               <option value="verified">Verified</option>
               <option value="pending">Pending</option>
               <option value="expired">Expired</option>
             </select>
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Notes</label>
+          </label>
+          <label className="col-span-2 block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Notes</span>
             <textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} rows={2} className={inputCls} />
-          </div>
+          </label>
           {error && <div className="col-span-2 text-rose-700 text-xs flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {error}</div>}
           {sub.website && (
             <div className="col-span-2 text-[10px] text-slate-500">
@@ -500,42 +517,42 @@ function ManualAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 grid grid-cols-2 gap-2 text-xs">
-          <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Company *</label>
+          <label className="col-span-2 block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Company *</span>
             <input value={form.company} onChange={(e) => update("company", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Contact Name</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Contact Name</span>
             <input value={form.contactName} onChange={(e) => update("contactName", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Email</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Email</span>
             <input value={form.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Phone</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Phone</span>
             <input value={form.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Website</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Website</span>
             <input value={form.website} onChange={(e) => update("website", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">City</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">City</span>
             <input value={form.city} onChange={(e) => update("city", e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">State (2-letter)</label>
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">State (2-letter)</span>
             <input value={form.state} onChange={(e) => update("state", e.target.value.toUpperCase())} maxLength={2} className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">NAICS Codes (comma sep)</label>
+          </label>
+          <label className="col-span-2 block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">NAICS Codes (comma sep)</span>
             <input value={form.naicsCodes} onChange={(e) => update("naicsCodes", e.target.value)} placeholder="561730, 561740" className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Certifications (comma sep)</label>
+          </label>
+          <label className="col-span-2 block">
+            <span className="block text-[10px] font-semibold text-slate-600 mb-1">Certifications (comma sep)</span>
             <input value={form.certifications} onChange={(e) => update("certifications", e.target.value)} placeholder="SBA, 8a, HUBZone" className="w-full px-2 py-1.5 border border-slate-300 rounded" />
-          </div>
+          </label>
           {error && <div className="col-span-2 text-rose-700 text-xs flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {error}</div>}
         </div>
         <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">

@@ -149,7 +149,7 @@ export default function OutreachPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <ActionTile href="/outreach/followups" icon={<MessageSquareReply className="w-5 h-5" />}
-          title={`Pending Follow-ups${pendingFollowups > 0 ? ` (${pendingFollowups})` : ""}`}
+          title={pendingFollowups > 0 ? `Pending Follow-ups (${pendingFollowups})` : "Pending Follow-ups"}
           description="AI-drafted replies to interested subs. Edit, attach docs, send with one click." />
         <ActionTile href="/subcontractors" icon={<Compass className="w-5 h-5" />} title="Subcontractor Network"
           description="Discover new subs from USASpending + SAM.gov, manage your network." />

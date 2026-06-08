@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { API_BASE } from "@/lib/apiBase";
 const LOCAL_STORAGE_KEY = "arber_saved_opportunities";
 
@@ -158,10 +158,13 @@ export function SavedOpportunitiesProvider({ children }: { children: ReactNode }
     setSavedNoticeIds(new Set());
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ savedIds, toggle, isSaved, count: savedIds.size, removeLocal, clearAllLocal }),
+    [savedIds, toggle, isSaved, removeLocal, clearAllLocal],
+  );
+
   return (
-    <SavedOpportunitiesContext.Provider
-      value={{ savedIds, toggle, isSaved, count: savedIds.size, removeLocal, clearAllLocal }}
-    >
+    <SavedOpportunitiesContext.Provider value={contextValue}>
       {children}
     </SavedOpportunitiesContext.Provider>
   );
