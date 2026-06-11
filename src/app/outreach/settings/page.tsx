@@ -324,7 +324,7 @@ export default function OutreachSettingsPage() {
               {testResult.ok ? `✓ Sent successfully via ${testResult.provider || "configured provider"}` : `✗ ${testResult.error || "Test failed"}`}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Info className="w-3 h-3" /> Save settings first, then test. Test send doesn't require recipients to be in your network.</p>
+          <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Info className="w-3 h-3" /> Save settings first, then test. Test send doesn&apos;t require recipients to be in your network.</p>
         </Section>
       </div>
     </div>

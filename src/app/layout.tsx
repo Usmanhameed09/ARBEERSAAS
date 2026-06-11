@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { SavedOpportunitiesProvider } from "@/context/SavedOpportunitiesContext";
 import { PipelineProvider } from "@/context/PipelineContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
+import GlobalToast from "@/components/GlobalToast";
 
 const sourceSans = Source_Sans_3({
   variable: "--font-source-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
             </PipelineProvider>
           </SavedOpportunitiesProvider>
         </AuthProvider>
+        <GlobalToast />
       </body>
     </html>
   );

@@ -17,6 +17,73 @@ function getAuthHeaders(): Record<string, string> {
   };
 }
 
+/**
+ * Extract a clean, user-readable message from any backend response.
+ *
+ * The backend's global error handler returns:
+ *   { success: false, error: { code, message, httpStatus } }
+ * Older endpoints may return { error: "..." } or { detail: "..." }.
+ * This normalizes all of them to a single string.
+ */
+export function parseApiError(data: unknown, fallback = "Something went wrong. Please try again."): string {
+  if (!data || typeof data !== "object") return fallback;
+  const d = data as Record<string, unknown>;
+  const err = d.error;
+  if (err && typeof err === "object" && "message" in err) {
+    const m = (err as Record<string, unknown>).message;
+    if (typeof m === "string" && m) return m;
+  }
+  if (typeof err === "string" && err) return err;
+  if (typeof d.detail === "string" && d.detail) return d.detail;
+  if (typeof d.message === "string" && d.message) return d.message;
+  return fallback;
+}
+
+/**
+ * Centralized fetch wrapper. Returns parsed JSON on success; on any failure
+ * (network, non-2xx, structured error body) it surfaces a global toast and
+ * throws an Error with the clean message. Use for calls where you want the
+ * error shown to the user automatically.
+ */
+export async function apiCall<T = unknown>(
+  path: string,
+  init?: RequestInit & { base?: string; toastOnError?: boolean },
+): Promise<T> {
+  const base = init?.base || API_BASE;
+  const toastOnError = init?.toastOnError !== false; // default: show toast
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}${path}`, {
+      ...init,
+      headers: { ...getAuthHeaders(), ...(init?.headers || {}) },
+    });
+  } catch (e) {
+    const msg = e instanceof TypeError
+      ? "Couldn't reach the server. Check your connection and try again."
+      : (e instanceof Error ? e.message : "Network error.");
+    if (toastOnError) void emitToast(msg);
+    throw new Error(msg);
+  }
+  let data: unknown = null;
+  try {
+    data = await resp.json();
+  } catch {
+    data = null;
+  }
+  if (!resp.ok) {
+    const msg = parseApiError(data, `Request failed (${resp.status}).`);
+    if (toastOnError) void emitToast(msg);
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+/** Fire a global error toast without importing the React component (avoids cycles). */
+async function emitToast(message: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("arber:toast", { detail: { kind: "error", message } }));
+}
+
 // ============================================================================
 // Phase 1: SCAN — Fast SAM.gov metadata lookup + DB cross-reference
 // ============================================================================
@@ -411,27 +478,30 @@ export async function generateDraftV2(
     });
     clearTimeout(timeout);
     if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      return { success: false, error: `Request failed: ${resp.status} ${text.slice(0, 200)}` };
+      const data = await resp.json().catch(() => null);
+      const msg = parseApiError(data, `Draft generation failed (${resp.status}).`);
+      emitToast(msg);
+      return { success: false, error: msg };
     }
     const data = await resp.json();
     console.log("[generateDraftV2] Response keys:", Object.keys(data));
-    console.log("[generateDraftV2] Draft keys:", data.draft ? Object.keys(data.draft) : "NO DRAFT");
-    console.log("[generateDraftV2] Provenance sections:", data.provenance ? Object.keys(data.provenance) : "NONE");
     return data;
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
-      return { success: false, error: "Request timed out after 35 minutes. The backend may still be processing — check your Drafts list in a minute. Otherwise please try again." };
+      const msg = "Draft generation is taking longer than expected. The backend may still be processing — check your Drafts list in a minute.";
+      emitToast(msg);
+      return { success: false, error: msg };
     }
     if (err instanceof TypeError && err.message.includes("fetch")) {
-      return {
-        success: false,
-        error: "Draft generation could not reach the backend. If this keeps happening, the API gateway may be timing out before the draft finishes.",
-      };
+      const msg = "Draft generation could not reach the backend. The connection may have dropped — your draft may still be saving, check the Drafts list shortly.";
+      emitToast(msg);
+      return { success: false, error: msg };
     }
     console.error("[generateDraftV2] Fetch error:", err);
-    return { success: false, error: `Network error: ${err instanceof Error ? err.message : String(err)}` };
+    const msg = `Network error: ${err instanceof Error ? err.message : String(err)}`;
+    emitToast(msg);
+    return { success: false, error: msg };
   }
 }
 
