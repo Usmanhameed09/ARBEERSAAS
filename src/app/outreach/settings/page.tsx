@@ -6,8 +6,9 @@ import {
   Compass, Settings as SettingsIcon, Key,
 } from "lucide-react";
 import {
-  getOutreachSettings, updateOutreachSettings, outreachTestSend, testSamApiKey,
-  type OutreachSettings, type OutreachSettingsInput, type SamKeyTestResult,
+  getOutreachSettings, updateOutreachSettings, outreachTestSend,
+  testSamApiKey, getSamKeyStatus, saveSamApiKey,
+  type OutreachSettings, type OutreachSettingsInput,
 } from "@/lib/api";
 
 const PASSWORD_MASK = "••••••••";
@@ -139,12 +140,7 @@ export default function OutreachSettingsPage() {
 
       <div className="space-y-5">
         {/* SAM.GOV API KEY — required for scanning */}
-        <SamApiKeySection
-          form={form}
-          settings={settings}
-          update={update}
-          PASSWORD_MASK={PASSWORD_MASK}
-        />
+        <SamApiKeySection />
 
         {/* SENDER IDENTITY */}
         <Section title="Sender Identity" icon={<Mail className="w-4 h-4" />} description="How recipients see your email — From name, reply-to address, and signature.">
@@ -356,35 +352,55 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
-function SamApiKeySection({
-  form,
-  settings,
-  update,
-  PASSWORD_MASK,
-}: {
-  form: OutreachSettingsInput;
-  settings: OutreachSettings;
-  update: (k: keyof OutreachSettingsInput, v: unknown) => void;
-  PASSWORD_MASK: string;
-}) {
+function SamApiKeySection() {
+  const [keyInput, setKeyInput] = useState("");
   const [show, setShow] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<SamKeyTestResult | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ isSet: boolean; preview: string }>({ isSet: false, preview: "" });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const candidate = (form.sam_api_key || "").trim();
-  const hasStoredKey = !!settings.sam_api_keySet;
+  useEffect(() => {
+    getSamKeyStatus().then(setStatus).catch(() => { /* ignore */ });
+  }, []);
+
+  const candidate = keyInput.trim();
 
   const runTest = async () => {
     setTesting(true);
-    setResult(null);
+    setMsg(null);
     try {
-      // If user has typed a candidate, test that; otherwise test the saved one.
       const r = await testSamApiKey(candidate || undefined);
-      setResult(r);
+      if (r.ok) {
+        setMsg({ ok: true, text: `Key works${typeof r.totalRecords === "number" ? ` — SAM returned ${r.totalRecords} record(s) on test` : ""}.` });
+      } else {
+        setMsg({ ok: false, text: r.message || r.code || "Key test failed." });
+      }
     } catch (e) {
-      setResult({ ok: false, code: "unknown", message: e instanceof Error ? e.message : String(e) });
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Test failed." });
     } finally {
       setTesting(false);
+    }
+  };
+
+  const runSave = async () => {
+    if (!candidate) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const r = await saveSamApiKey(candidate);
+      if (r.success) {
+        setMsg({ ok: true, text: r.message || "Saved. Scanning is active." });
+        setKeyInput("");
+        const s = await getSamKeyStatus();
+        setStatus(s);
+      } else {
+        setMsg({ ok: false, text: r.message || "Save failed." });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Save failed." });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -392,16 +408,21 @@ function SamApiKeySection({
     <Section
       title="SAM.gov API Key (required for scanning)"
       icon={<Key className="w-4 h-4 text-amber-600" />}
-      description="The key your account uses to fetch federal opportunities from SAM.gov. If scanning returns 0 results, this is the most common cause — keys are invalidated after 60 days of inactivity, password rotation, or entity recertification lapse."
+      description="The key the system uses to fetch federal opportunities from SAM.gov. If scanning returns 0 results, an expired key is the most common cause — SAM keys are invalidated after 60 days of inactivity, password rotation, or entity recertification lapse."
     >
-      <Field label="SAM.gov API key" full>
+      {status.isSet && (
+        <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" /> A key is currently active: <span className="font-mono">{status.preview}</span>
+        </div>
+      )}
+      <Field label="New SAM.gov API key" full>
         <div className="relative">
           <input
             type={show ? "text" : "password"}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 pr-20"
-            value={form.sam_api_key || ""}
-            onChange={(e) => update("sam_api_key", e.target.value)}
-            placeholder={hasStoredKey ? PASSWORD_MASK : "Paste your 40-character SAM.gov API key here"}
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="Paste your 40-character SAM.gov API key here"
           />
           <button
             type="button"
@@ -412,36 +433,34 @@ function SamApiKeySection({
             {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
-        {hasStoredKey && (
-          <p className="text-[10px] text-emerald-700 mt-1">✓ Key set. Leave blank to keep current.</p>
-        )}
         <p className="text-[10px] text-gray-500 mt-1">
           Get a key at <span className="font-mono">sam.gov → Profile → Account Details → API Keys → Request Public API Key</span>.
-          Saving here overrides the server&apos;s shared key for your scans.
+          The key is validated against SAM.gov before saving, so a bad key is rejected immediately.
         </p>
       </Field>
 
-      <div className="flex items-center gap-2 mt-3">
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
         <button
           type="button"
           onClick={runTest}
-          disabled={testing || (!candidate && !hasStoredKey)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-semibold rounded-lg"
+          disabled={testing || saving || (!candidate && !status.isSet)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-xs font-semibold rounded-lg"
         >
           {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
           {candidate ? "Test this key" : "Test saved key"}
         </button>
-        {result?.ok && (
-          <span className="text-xs text-emerald-700 flex items-center gap-1">
-            <CheckCircle2 className="w-4 h-4" /> Key works
-            {typeof result.totalRecords === "number" && (
-              <span className="text-gray-500"> (SAM returned {result.totalRecords} records on test)</span>
-            )}
-          </span>
-        )}
-        {result && !result.ok && (
-          <span className="text-xs text-rose-700 flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" /> {result.message || result.code || "Failed"}
+        <button
+          type="button"
+          onClick={runSave}
+          disabled={saving || testing || !candidate}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-xs font-semibold rounded-lg"
+        >
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          Validate &amp; Save Key
+        </button>
+        {msg && (
+          <span className={`text-xs flex items-center gap-1 ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>
+            {msg.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />} {msg.text}
           </span>
         )}
       </div>

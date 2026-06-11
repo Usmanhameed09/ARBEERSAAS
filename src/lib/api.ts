@@ -1115,6 +1115,46 @@ export async function testSamApiKey(candidate?: string): Promise<SamKeyTestResul
   return (await resp.json()) as SamKeyTestResult;
 }
 
+export interface SamKeyStatus {
+  isSet: boolean;
+  preview: string;
+}
+
+/** Whether a SAM key is configured + a masked preview. */
+export async function getSamKeyStatus(): Promise<SamKeyStatus> {
+  try {
+    const resp = await fetch(`${API_BASE}/settings/sam-key`, { headers: getAuthHeaders() });
+    if (!resp.ok) return { isSet: false, preview: "" };
+    return (await resp.json()) as SamKeyStatus;
+  } catch {
+    return { isSet: false, preview: "" };
+  }
+}
+
+export interface SamKeySaveResult {
+  success: boolean;
+  message?: string;
+  code?: string;
+}
+
+/** Validate (against SAM.gov) then save a new SAM API key. Rejects bad keys. */
+export async function saveSamApiKey(key: string): Promise<SamKeySaveResult> {
+  try {
+    const resp = await fetch(`${API_BASE}/settings/sam-key`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ key }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { success: false, message: data?.message || `Save failed (HTTP ${resp.status})` };
+    }
+    return data as SamKeySaveResult;
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Network error saving key" };
+  }
+}
+
 export async function getOutreachSettings(): Promise<OutreachSettings> {
   const resp = await fetch(`${API_BASE}/outreach/settings`, { headers: getAuthHeaders() });
   const data = await resp.json();
