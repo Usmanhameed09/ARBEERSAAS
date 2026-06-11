@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Search, Radar, Archive, Trash2, Upload } from "lucide-react";
+import { Search, Radar, Archive, Trash2, Upload, AlertCircle } from "lucide-react";
 import type { Opportunity } from "@/data/opportunities";
 import { NAICS_CODES } from "@/data/opportunities";
 import {
@@ -369,8 +369,41 @@ function OpportunitiesContent() {
         profileNaicsCodes={profileNaicsCodes}
       />
 
+      {/* SAM scan error banner — surfaces invalid_key / rate_limit / outage */}
+      {scanResult?.error && !isAnalyzing && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-3 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-rose-900">
+              {scanResult.error.code === "invalid_key" && "SAM.gov API key invalid"}
+              {scanResult.error.code === "rate_limited" && "SAM.gov rate limit hit"}
+              {scanResult.error.code === "unavailable" && "SAM.gov is unavailable"}
+              {scanResult.error.code === "network" && "Couldn't reach SAM.gov"}
+              {scanResult.error.code === "unknown" && "Scan failed"}
+            </p>
+            <p className="text-xs text-rose-700 mt-1">{scanResult.error.message}</p>
+            {scanResult.error.code === "invalid_key" && (
+              <a
+                href="/outreach/settings"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-rose-800 underline mt-2"
+              >
+                Update SAM API key in Settings →
+              </a>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setScanResult(null)}
+            className="text-rose-400 hover:text-rose-700 text-xs"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Scan Results Bar */}
-      {scanResult && !isAnalyzing && (
+      {scanResult && !scanResult.error && !isAnalyzing && (
         <ScanResultsBar
           scanResult={scanResult}
           isAnalyzing={isAnalyzing}

@@ -41,6 +41,13 @@ export interface ScanResult {
   newCount: number;
   existingCount: number;
   opportunities: ScanOpportunity[];
+  /** Present when the scan could not run; backend returns this instead of throwing
+   *  so the caller can render an actionable banner. */
+  error?: {
+    code: "invalid_key" | "rate_limited" | "unavailable" | "network" | "unknown";
+    message: string;
+    httpStatus: number;
+  };
 }
 
 /** Phase 1: Scan SAM.gov and cross-ref with DB to find new vs existing. */
@@ -1075,6 +1082,7 @@ export interface OutreachSettings {
   smtp_passwordSet?: boolean;
   imap_passwordSet?: boolean;
   google_places_api_keySet?: boolean;
+  sam_api_keySet?: boolean;
 }
 
 export type OutreachSettingsInput = Partial<OutreachSettings> & {
@@ -1083,7 +1091,29 @@ export type OutreachSettingsInput = Partial<OutreachSettings> & {
   smtp_password?: string;
   imap_password?: string;
   google_places_api_key?: string;
+  sam_api_key?: string;
 };
+
+export interface SamKeyTestResult {
+  ok: boolean;
+  totalRecords?: number;
+  code?: "invalid_key" | "rate_limited" | "unavailable" | "network" | "unknown";
+  httpStatus?: number;
+  message?: string;
+}
+
+/** Test a candidate SAM API key (or the stored one if no candidate). */
+export async function testSamApiKey(candidate?: string): Promise<SamKeyTestResult> {
+  const resp = await fetch(`${API_BASE}/settings/sam-key/test`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(candidate ? { key: candidate } : {}),
+  });
+  if (!resp.ok) {
+    return { ok: false, code: "unknown", message: `HTTP ${resp.status}` };
+  }
+  return (await resp.json()) as SamKeyTestResult;
+}
 
 export async function getOutreachSettings(): Promise<OutreachSettings> {
   const resp = await fetch(`${API_BASE}/outreach/settings`, { headers: getAuthHeaders() });

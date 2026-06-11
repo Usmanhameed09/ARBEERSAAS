@@ -6,8 +6,8 @@ import {
   Compass, Settings as SettingsIcon, Key,
 } from "lucide-react";
 import {
-  getOutreachSettings, updateOutreachSettings, outreachTestSend,
-  type OutreachSettings, type OutreachSettingsInput,
+  getOutreachSettings, updateOutreachSettings, outreachTestSend, testSamApiKey,
+  type OutreachSettings, type OutreachSettingsInput, type SamKeyTestResult,
 } from "@/lib/api";
 
 const PASSWORD_MASK = "••••••••";
@@ -138,6 +138,14 @@ export default function OutreachSettingsPage() {
       )}
 
       <div className="space-y-5">
+        {/* SAM.GOV API KEY — required for scanning */}
+        <SamApiKeySection
+          form={form}
+          settings={settings}
+          update={update}
+          PASSWORD_MASK={PASSWORD_MASK}
+        />
+
         {/* SENDER IDENTITY */}
         <Section title="Sender Identity" icon={<Mail className="w-4 h-4" />} description="How recipients see your email — From name, reply-to address, and signature.">
           <div className="grid grid-cols-2 gap-3">
@@ -345,5 +353,98 @@ function Field({ label, children, full }: { label: string; children: React.React
       <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">{label}</label>
       {children}
     </div>
+  );
+}
+
+function SamApiKeySection({
+  form,
+  settings,
+  update,
+  PASSWORD_MASK,
+}: {
+  form: OutreachSettingsInput;
+  settings: OutreachSettings;
+  update: (k: keyof OutreachSettingsInput, v: unknown) => void;
+  PASSWORD_MASK: string;
+}) {
+  const [show, setShow] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<SamKeyTestResult | null>(null);
+
+  const candidate = (form.sam_api_key || "").trim();
+  const hasStoredKey = !!settings.sam_api_keySet;
+
+  const runTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      // If user has typed a candidate, test that; otherwise test the saved one.
+      const r = await testSamApiKey(candidate || undefined);
+      setResult(r);
+    } catch (e) {
+      setResult({ ok: false, code: "unknown", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Section
+      title="SAM.gov API Key (required for scanning)"
+      icon={<Key className="w-4 h-4 text-amber-600" />}
+      description="The key your account uses to fetch federal opportunities from SAM.gov. If scanning returns 0 results, this is the most common cause — keys are invalidated after 60 days of inactivity, password rotation, or entity recertification lapse."
+    >
+      <Field label="SAM.gov API key" full>
+        <div className="relative">
+          <input
+            type={show ? "text" : "password"}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 pr-20"
+            value={form.sam_api_key || ""}
+            onChange={(e) => update("sam_api_key", e.target.value)}
+            placeholder={hasStoredKey ? PASSWORD_MASK : "Paste your 40-character SAM.gov API key here"}
+          />
+          <button
+            type="button"
+            onClick={() => setShow((p) => !p)}
+            className="absolute right-2 top-2 text-gray-400 hover:text-gray-700"
+            aria-label={show ? "Hide key" : "Show key"}
+          >
+            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        {hasStoredKey && (
+          <p className="text-[10px] text-emerald-700 mt-1">✓ Key set. Leave blank to keep current.</p>
+        )}
+        <p className="text-[10px] text-gray-500 mt-1">
+          Get a key at <span className="font-mono">sam.gov → Profile → Account Details → API Keys → Request Public API Key</span>.
+          Saving here overrides the server&apos;s shared key for your scans.
+        </p>
+      </Field>
+
+      <div className="flex items-center gap-2 mt-3">
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testing || (!candidate && !hasStoredKey)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-semibold rounded-lg"
+        >
+          {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+          {candidate ? "Test this key" : "Test saved key"}
+        </button>
+        {result?.ok && (
+          <span className="text-xs text-emerald-700 flex items-center gap-1">
+            <CheckCircle2 className="w-4 h-4" /> Key works
+            {typeof result.totalRecords === "number" && (
+              <span className="text-gray-500"> (SAM returned {result.totalRecords} records on test)</span>
+            )}
+          </span>
+        )}
+        {result && !result.ok && (
+          <span className="text-xs text-rose-700 flex items-center gap-1">
+            <AlertCircle className="w-4 h-4" /> {result.message || result.code || "Failed"}
+          </span>
+        )}
+      </div>
+    </Section>
   );
 }
